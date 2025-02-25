@@ -1,0 +1,42 @@
+graph TD
+    Start([Project Start]) --> M1[M1: Core Infrastructure]
+    M1 --> M2[M2: Basic Photo Management]
+    M2 --> M3[M3: Album Support]
+    M3 --> M4[M4: Sharing System]
+    M4 --> M5[M5: InvokeAI Integration]
+    M5 --> M6[M6: Remote Backend Support]
+    M6 --> End([Complete Backend])
+
+    subgraph "M1: Core Infrastructure"
+        M1 --> DB[Database Setup]
+        M1 --> FS[File System Structure]
+        M1 --> API[API Framework]
+    end
+
+    subgraph "M2: Basic Photo Management"
+        M2 --> Upload[Upload System]
+        M2 --> Meta[Metadata Management]
+        M2 --> Thumb[Thumbnail Generation]
+    end
+
+    subgraph "M3: Album Support"
+        M3 --> AlbumOps[Album Operations]
+        M3 --> PhotoOrg[Photo Organization]
+    end
+
+    subgraph "M4: Sharing System"
+        M4 --> Share[Share Link Generation]
+        M4 --> Access[Access Control]
+    end
+
+    subgraph "M5: InvokeAI Integration"
+        M5 --> BackendConn[Backend Connection]
+        M5 --> Sessions[Generation Sessions]
+        M5 --> Steps[Generation Steps]
+        M5 --> Retrieval[Image Retrieval]
+    end
+    
+    subgraph "M6: Remote Backend Support"
+        M6 --> PodMgmt[Pod Management]
+        M6 --> CostOpt[Cost Optimization]
+    end
