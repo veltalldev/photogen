@@ -1,0 +1,55 @@
+graph TD
+    Client[Frontend Client] --> API[FastAPI Backend]
+    
+    subgraph "Core Services"
+        API --> PhotoService[Photo Service]
+        API --> AlbumService[Album Service]
+        API --> ShareService[Share Service]
+        API --> BackendManager[Backend Connection Manager]
+    end
+    
+    subgraph "Generation Services"
+        API --> SessionService[Generation Session Service]
+        API --> StepService[Generation Step Service]
+        API --> ImageRetrievalService[Image Retrieval Service]
+        
+        SessionService --> StepService
+        StepService --> ImageRetrievalService
+    end
+    
+    subgraph "Storage"
+        PhotoService --> DB[(PostgreSQL Database)]
+        AlbumService --> DB
+        ShareService --> DB
+        SessionService --> DB
+        StepService --> DB
+        BackendManager --> DB
+        
+        PhotoService --> FS[File System]
+        ImageRetrievalService --> FS
+    end
+    
+    subgraph "External Integration"
+        BackendManager --> LocalInvokeAI[Local InvokeAI]
+        BackendManager --> RemoteInvokeAI[Remote InvokeAI]
+        
+        ImageRetrievalService --> LocalInvokeAI
+        ImageRetrievalService --> RemoteInvokeAI
+        
+        RemoteInvokeAI --> RunPodAPI[RunPod API]
+    end
+    
+    subgraph "File Structure"
+        FS --> UploadedPhotos[/data/photos/uploaded/]
+        FS --> GeneratedPhotos[/data/photos/generated/]
+        FS --> SessionPhotos[/data/photos/generated/sessions/]
+        FS --> AlternativesPhotos[/data/photos/generated/alternatives/]
+        FS --> Thumbnails[/data/photos/thumbnails/]
+    end
+    
+    subgraph "Background Tasks"
+        API --> RetrievalQueue[Retrieval Queue]
+        RetrievalQueue --> ImageRetrievalService
+        API --> PodMonitor[Pod Monitoring]
+        PodMonitor --> BackendManager
+    end
