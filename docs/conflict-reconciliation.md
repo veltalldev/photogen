@@ -1,0 +1,1 @@
+When developing a logical unit of work, inspiration often comes and drives development further than had been planned for. This document aims to record all these deviations for post-hoc reconciliation efforts.
