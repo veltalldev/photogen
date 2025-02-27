@@ -162,16 +162,23 @@ CREATE TABLE generation_history (
 
 ```
 /data
-  └── photos/                    # Main photo directory
-      ├── generated/             # AI-generated images
-      │   ├── sessions/          # Organized by generation session
-      │   │   └── {session_id}/  # Contains all images from a session
-      │   │       └── {step_id}/ # Further organized by step
-      │   └── alternatives/      # Stores unselected variations
-      ├── uploaded/              # User uploads
-      └── thumbnails/            # All thumbnails (WebP format)
-          ├── generated/         # Mirrors generated structure
-          └── uploaded/          # Mirrors uploaded structure
+  └── photos/                        # Main photo directory
+      ├── generated/                 # AI-generated images
+      │   ├── sessions/              # Organized by generation session
+      │   │   └── {session_id}/      # Contains all images from a session
+      │   │       └── {step_id}/     # Further organized by step
+      │   │           ├── selected/  # Contains selected images
+      │   │           └── variants/  # Contains alternative variations
+      │   └── completed/             # Final selected images (flat organization)
+      │       └── {yyyy-mm-dd}/      # Organized by date
+      ├── uploaded/                  # User uploads
+      │   └── {yyyy-mm-dd}/          # Organized by date
+      └── thumbnails/                # All thumbnails (WebP format)
+          ├── generated/             # Mirrors generated structure
+          │   ├── sessions/          # Same session-based structure
+          │   └── completed/         # Same date-based structure
+          └── uploaded/              # Mirrors uploaded structure
+              └── {yyyy-mm-dd}/      # Same date-based structure
 ```
 
 ### 2.3 Service Layer
@@ -197,29 +204,134 @@ class ShareService:
 #### Generation Services
 ```python
 class InvokeAIClient:
+    """Client for interacting with InvokeAI API, handling complex graph-based requests and response processing."""
+    
+    # Connection management
     async def connect(self, base_url: str) -> bool
-    async def get_models(self) -> List[Model]
-    async def queue_generation(self, request: GenerationRequest) -> BatchResponse
+    async def get_api_version(self) -> str
+    async def check_health(self) -> bool
+    
+    # Model management
+    async def get_models(self, refresh_cache: bool = False) -> List[Model]
+    async def find_compatible_vae(self, model_key: str) -> Optional[Model]
+    
+    # Graph construction
+    def create_generation_graph(self, parameters: GenerationParameters) -> Dict
+    def validate_graph(self, graph: Dict) -> Tuple[bool, Optional[str]]
+    
+    # Generation flow
+    async def queue_generation(self, parameters: GenerationParameters) -> BatchResponse
     async def get_batch_status(self, batch_id: str) -> BatchStatus
-    async def get_image(self, image_id: str) -> bytes
-    async def get_thumbnail(self, image_id: str) -> bytes
-    async def get_metadata(self, image_id: str) -> Dict
+    async def wait_for_batch_completion(self, batch_id: str, timeout_seconds: int = 300) -> BatchResult
+    
+    # Image retrieval
+    async def list_recent_images(self, limit: int, since: Optional[datetime] = None) -> List[ImageInfo]
+    async def get_image(self, image_name: str) -> bytes
+    async def get_thumbnail(self, image_name: str) -> bytes
+    async def get_image_metadata(self, image_name: str) -> Dict
+    
+    # Clean-up operations
+    async def delete_image(self, image_name: str) -> bool
+    
+    # Cache and helper methods
+    def _build_model_cache(self, models_data: Dict) -> None
+    def _create_unique_node_id(self, prefix: str) -> str
     
 class GenerationSessionService:
-    async def create_session(self, entry_type: str, source_image_id: Optional[UUID]) -> GenerationSession
+    """Manages generation sessions and their lifecycle."""
+    
+    async def create_session(self, 
+                            entry_type: str, 
+                            source_image_id: Optional[UUID]) -> GenerationSession
+    
     async def get_session(self, id: UUID) -> Optional[GenerationSession]
+    async def list_sessions(self, limit: int, offset: int, status: Optional[str] = None) -> List[GenerationSession]
     async def complete_session(self, id: UUID) -> bool
     async def abandon_session(self, id: UUID) -> bool
+    async def delete_session(self, id: UUID) -> bool
+    
+    # New methods
+    async def get_session_history(self, id: UUID) -> SessionHistory
+    async def get_latest_image(self, id: UUID) -> Optional[Photo]
+    async def get_session_statistics(self, id: UUID) -> SessionStats
     
 class GenerationStepService:
-    async def create_step(self, session_id: UUID, request: StepRequest) -> GenerationStep
+    """Manages individual generation steps within a session."""
+    
+    async def create_step(self, 
+                         session_id: UUID, 
+                         request: StepRequest, 
+                         correlation_id: Optional[str] = None) -> GenerationStep
+    
+    async def get_step(self, id: UUID) -> Optional[GenerationStep]
+    async def get_step_status(self, id: UUID) -> StepStatus
     async def select_alternative(self, step_id: UUID, image_id: UUID) -> bool
     async def get_step_alternatives(self, step_id: UUID) -> List[StepAlternative]
     async def get_session_steps(self, session_id: UUID) -> List[GenerationStep]
+    
+    # New methods
+    async def cancel_step(self, id: UUID) -> bool
+    async def get_step_lineage(self, id: UUID) -> List[GenerationStep]
+    async def retry_failed_step(self, id: UUID) -> Optional[GenerationStep]
+    async def retry_step_retrievals(self, id: UUID) -> RetrievalStatus
 
 class ImageRetrievalService:
-    async def retrieve_and_store(self, backend_url: str, image_id: str, session_id: UUID, step_id: UUID) -> Photo
-    async def retry_failed_retrievals() -> Dict[str, int]  # Returns counts of success/failure
+    """Service for retrieving, correlating, and storing generated images from InvokeAI."""
+    
+    # Core retrieval methods
+    async def retrieve_batch_images(self, 
+                                   batch_id: str, 
+                                   expected_count: int, 
+                                   session_id: UUID, 
+                                   step_id: UUID,
+                                   correlation_id: Optional[str] = None) -> RetrievalResult
+    
+    async def retrieve_single_image(self, 
+                                   image_name: str, 
+                                   session_id: UUID, 
+                                   step_id: UUID) -> Optional[Photo]
+    
+    # Correlation strategies
+    async def _correlate_images_by_timestamp(self, 
+                                           batch_completion_time: datetime, 
+                                           expected_count: int) -> List[str]
+    
+    async def _correlate_images_by_id(self, 
+                                     correlation_id: str,
+                                     expected_count: int) -> List[str]
+    
+    # Retry mechanisms
+    async def retry_failed_retrievals(self, step_id: Optional[UUID] = None) -> Dict[str, int]
+    async def retry_specific_retrievals(self, photo_ids: List[UUID]) -> Dict[str, int]
+    
+    # Status management
+    async def get_retrieval_status(self, step_id: UUID) -> RetrievalStatus
+    
+    # Storage operations
+    async def _store_image(self, 
+                          image_data: bytes, 
+                          thumbnail_data: bytes,
+                          metadata: Dict, 
+                          session_id: UUID, 
+                          step_id: UUID) -> Photo
+    
+    async def _organize_files(self, 
+                             session_id: UUID, 
+                             step_id: UUID, 
+                             is_selected: bool = False) -> Tuple[str, str]
+
+class ModelManagementService:
+    """Service for managing InvokeAI model information and caching."""
+    
+    async def get_available_models(self, refresh_cache: bool = False) -> List[Model]
+    async def get_model_by_key(self, key: str) -> Optional[Model]
+    async def get_compatible_vaes(self, model_key: str) -> List[Model]
+    async def get_default_parameters(self, model_key: str) -> Dict
+    async def refresh_model_cache(self) -> bool
+    async def add_model_to_favorites(self, model_key: str) -> bool
+    async def remove_model_from_favorites(self, model_key: str) -> bool
+    async def get_favorite_models(self) -> List[Model]
+
 ```
 
 #### Connection Management
@@ -236,84 +348,154 @@ class RunPodManager:
     async def get_cost_metrics(pod_id: str) -> CostMetrics
 ```
 
+#### Server Storage
+```python
+def generate_storage_paths(session_id: UUID, step_id: UUID, image_id: str, is_selected: bool = False) -> Dict[str, str]:
+    """Generate file paths for storing retrieved images from InvokeAI."""
+    
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    # Session-based paths (for active workflow)
+    session_path = f"data/photos/generated/sessions/{session_id}/{step_id}"
+    session_sub_path = "selected" if is_selected else "variants"
+    session_full_path = f"{session_path}/{session_sub_path}/{image_id}.png"
+    session_thumb_path = f"data/photos/thumbnails/generated/sessions/{session_id}/{step_id}/{session_sub_path}/{image_id}.webp"
+    
+    # Completed paths (for selected images)
+    completed_path = f"data/photos/generated/completed/{today}/{image_id}.png"
+    completed_thumb_path = f"data/photos/thumbnails/generated/completed/{today}/{image_id}.webp"
+    
+    return {
+        "session_full_path": session_full_path,
+        "session_thumb_path": session_thumb_path,
+        "completed_full_path": completed_path if is_selected else None,
+        "completed_thumb_path": completed_thumb_path if is_selected else None
+    }
+```
+
 ## 3. Key Workflows
 
 ### 3.1 Generation Workflow
 
 The application implements a linear history model with alternatives:
 
-1. **Session Creation**
-   - User starts a new generation session (from scratch or from existing image)
-   - System creates a `generation_sessions` record
-
-2. **Step Creation**
+1. Session Creation
+   - User starts a new generation session
+   - System creates a generation_sessions record
+   
+2. Model Selection
+   - User selects a model from available models
+   - System retrieves compatible VAEs and default parameters
+   - System presents parameter suggestions to user
+   
+3. Step Creation
    - User configures prompt and parameters
-   - System creates a `generation_steps` record
-   - InvokeAI generates a batch of images (1-10)
-   - System retrieves and stores images
-
-3. **Alternative Selection**
-   - User selects one image as the "canon" choice for this step
-   - System marks the selection in `step_alternatives`
-   - Non-selected alternatives remain accessible but not part of the main timeline
-
-4. **Continuation**
-   - User can modify prompts and create a new step
-   - New step references the previous step as its parent
-
-5. **Reversion**
-   - User can revert to any previous step
-   - System deletes or marks as invalid all subsequent steps
-   - User can select a different alternative and create a new branch
-
-6. **Completion**
-   - User completes the session
+   - System generates a correlation ID for tracking
+   - System creates a generation_steps record
+   - System constructs the graph-based request:
+     - Creates all required nodes (model_loader, prompt, noise, etc.)
+     - Sets up all edges between nodes
+     - Populates metadata in both nodes and data section
+   - System submits request to InvokeAI queue
+   - System receives batch ID
+   
+4. Status Monitoring
+   - System polls batch status with exponential backoff
+   - System updates step status based on batch status
+   - System provides progress information to user
+   
+5. Image Retrieval
+   - On batch completion, system initiates image retrieval:
+     - Queries recent images by timestamp
+     - Verifies count matches batch size
+     - Downloads full images, thumbnails, and metadata
+     - Stores files in appropriate locations
+     - Creates database records
+     - Updates retrieval status
+   
+6. Alternative Selection
+   - User selects one image as preferred
+   - System marks the selection in step_alternatives
+   - System copies selected image to completed folder (optional)
+   
+7. Continuation or Completion
+   - User can either:
+     - Create a new step based on selection
+     - Complete the session
    - System updates status and performs cleanup
 
 ### 3.2 Image Retrieval Process
 
-For both local and remote modes:
-
-1. **Generation Request**
-   - Application sends generation request to InvokeAI
-   - InvokeAI returns a batch ID
-
-2. **Status Monitoring**
-   - Application polls status until generation is complete
-   - On completion, InvokeAI provides image IDs
-
-3. **Image Retrieval**
-   - For each image ID:
-     - Retrieve full image via API
-     - Retrieve thumbnail via API
-     - Retrieve metadata via API
-   - Store images in the appropriate local directory
-   - Create database records with local paths
-
-4. **Error Handling**
-   - On network failures, implement retry mechanism
-   - For persistent failures, mark retrieval as failed
-   - Provide UI feedback and manual retry options
+1. Batch Completion Detection
+   - System detects batch completion through polling
+   - System records exact completion timestamp
+   
+2. Image Correlation
+   - System uses one of these strategies:
+     a. Timestamp-based: Retrieve images created after batch start
+     b. ID-based: Verify correlation ID in metadata
+     c. Count-based: Retrieve exactly the expected number of images
+   
+3. Parallel Retrieval
+   - For each correlated image:
+     - Create retrieval job with pending status
+     - Download full image, thumbnail, and metadata concurrently
+     - Store files in session/step folder structure
+     - Create photo database record with generation metadata
+     - Update retrieval status to completed
+   
+4. Error Handling
+   - For connection errors:
+     - Implement retry with exponential backoff
+     - Mark retrieval as failed after max attempts
+   - For partial retrievals:
+     - Continue with successfully retrieved images
+     - Mark failed retrievals for background retry
+   
+5. Status Reporting
+   - Provide real-time retrieval status to user
+   - Show progress indicators for ongoing retrievals
+   - Offer manual retry options for failed retrievals
+   
+6. Background Recovery
+   - Scheduled job checks for failed retrievals
+   - Implements longer-term retry strategy
+   - Updates database status on completion
 
 ### 3.3 Remote Backend Management
 
 For remote mode only:
 
-1. **Pod Startup**
-   - User initiates generation in remote mode
-   - System checks if pod is running
-   - If not, system starts pod via RunPod API
-   - System waits for pod to become available
-
-2. **Activity Monitoring**
+1. Pod Management
+   - User selects remote mode
+   - System checks for existing pod:
+     - If running: Connect to existing pod
+     - If stopped: Start pod via RunPod API
+     - If non-existent: Create new pod
+   
+2. Model Management
+   - System queries available models from remote pod
+   - System caches model information locally
+   - System maps model keys and hashes for future requests
+   
+3. Activity Monitoring
    - System tracks last activity timestamp
-   - After 30 minutes of inactivity, system stops pod
-   - Cost metrics are updated and displayed to user
-
-3. **Cost Tracking**
-   - System calculates current session cost
-   - Displays cost information in UI
-   - Provides shutdown option to control costs
+   - System calculates idle time
+   - After configurable idle threshold:
+     - System warns user of impending shutdown
+     - User can extend session or allow shutdown
+     - System stops pod via RunPod API
+   
+4. Cost Tracking
+   - System calculates session duration
+   - System estimates cost based on pod type
+   - System provides cost visualization to user
+   - System maintains cost history for budgeting
+   
+5. Failure Recovery
+   - System detects pod failures
+   - System offers restart options
+   - System recovers session state if possible
 
 ## 4. Implementation Guidelines
 
@@ -357,6 +539,22 @@ For remote mode only:
 - InvokeAI settings
 - RunPod API key (for remote mode)
 
+```python
+# InvokeAI Integration Configuration
+INVOKEAI_CONNECTION_TIMEOUT = 10  # seconds
+INVOKEAI_READ_TIMEOUT = 30  # seconds
+INVOKEAI_BATCH_STATUS_INTERVAL = 2  # seconds
+INVOKEAI_MODEL_CACHE_TTL = 900  # 15 minutes
+INVOKEAI_MAX_BATCH_SIZE = 10
+INVOKEAI_MAX_RETRIES = 5
+INVOKEAI_RETRY_DELAY = 2  # seconds
+
+# Remote Pod Configuration  
+RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY")
+RUNPOD_POD_TYPE = "NVIDIA A5000"
+RUNPOD_IDLE_TIMEOUT = 30  # minutes
+```
+
 ### 5.3 Monitoring
 - Local logging
 - Resource monitoring
@@ -364,7 +562,46 @@ For remote mode only:
 - Error reporting
 - Cost monitoring (remote mode)
 
+### 5.4 Background Tasks
+```python
+# Background task registration
+background_tasks = [
+    # Run every minute
+    ("retry_pending_retrievals", 60, image_retrieval_service.retry_pending_retrievals),
+    
+    # Run every 15 minutes
+    ("refresh_model_cache", 900, model_management_service.refresh_model_cache),
+    
+    # Run every 5 minutes
+    ("check_pod_idle", 300, backend_manager.check_pod_idle_status)
+]
+```
+
 ## 6. Security
+
+```python
+# Security validation for InvokeAI interaction
+def validate_model_access(model_key: str, user_id: UUID) -> bool:
+    """Validate if a user has access to the specified model."""
+    # Single-user system always returns True
+    return True
+
+def validate_generation_parameters(params: Dict) -> Tuple[bool, Optional[str]]:
+    """Validate generation parameters for security and resource constraints."""
+    # Validate dimensions
+    if params.get("width", 0) * params.get("height", 0) > 1920 * 1080:
+        return False, "Image dimensions too large"
+        
+    # Validate batch size
+    if params.get("batch_size", 1) > 10:
+        return False, "Batch size too large"
+        
+    # Validate steps
+    if params.get("steps", 0) > 50:
+        return False, "Step count too large"
+        
+    return True, None
+```
 
 ### 6.1 Share Links
 - Unique access keys
