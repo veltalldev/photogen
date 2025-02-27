@@ -1,8 +1,4 @@
-),
-    );
-  }
-}
-
+```
 // Comparison mode enum and provider
 enum ComparisonMode {
   sideBySide,
