@@ -1,10 +1,10 @@
 # Milestone 1.1: Database Setup - Detailed Task Breakdown
 
 ## 1.1.1 Initial Database Configuration
-- [ ] Install PostgreSQL if not already installed
-- [ ] Create the `photo_gallery_dev` database
-- [ ] Configure PostgreSQL permissions for application access
-- [ ] Test database connection
+- [x] Install PostgreSQL if not already installed
+- [x] Create the `photo_gallery_dev` database
+- [x] Configure PostgreSQL permissions for application access
+- [x] Test database connection
 
 ## 1.1.2 Basic Schema Setup
 - [ ] Create SQL script for core tables (photos, albums, album_photos)
