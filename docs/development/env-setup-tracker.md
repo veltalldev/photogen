@@ -8,23 +8,23 @@
 - [x] 1.1.5. Verify Python version in virtual environment
 
 ### 1.2. Install core dependencies
-- [ ] 1.2.1. Create requirements.txt file
-- [ ] 1.2.2. Add FastAPI and Uvicorn to requirements
-- [ ] 1.2.3. Add SQLAlchemy and database drivers (psycopg2-binary)
-- [ ] 1.2.4. Add Alembic for database migrations
-- [ ] 1.2.5. Add httpx for async HTTP requests
-- [ ] 1.2.6. Add Pydantic for data validation
-- [ ] 1.2.7. Add pytest, pytest-asyncio for testing
-- [ ] 1.2.8. Add Pillow for image processing
-- [ ] 1.2.9. Add additional utility packages (python-dotenv, etc.)
-- [ ] 1.2.10. Install all requirements with pip
+- [x] 1.2.1. Create requirements.txt file
+- [x] 1.2.2. Add FastAPI and Uvicorn to requirements
+- [x] 1.2.3. Add SQLAlchemy and database drivers (psycopg2-binary)
+- [x] 1.2.4. Add Alembic for database migrations
+- [x] 1.2.5. Add httpx for async HTTP requests
+- [x] 1.2.6. Add Pydantic for data validation
+- [x] 1.2.7. Add pytest, pytest-asyncio for testing
+- [x] 1.2.8. Add Pillow for image processing
+- [x] 1.2.9. Add additional utility packages (python-dotenv, etc.)
+- [x] 1.2.10. Install all requirements with pip
 
 ### 1.3. Configure PostgreSQL database
-- [ ] 1.3.1. Install PostgreSQL if not already installed
-- [ ] 1.3.2. Create local development database "photo_gallery_dev"
-- [ ] 1.3.3. Create database user for the application
-- [ ] 1.3.4. Configure appropriate permissions
-- [ ] 1.3.5. Verify database connection
+- [x] 1.3.1. Install PostgreSQL if not already installed
+- [x] 1.3.2. Create local development database "photo_gallery_dev"
+- [x] 1.3.3. Create database user for the application
+- [x] 1.3.4. Configure appropriate permissions
+- [x] 1.3.5. Verify database connection
 
 ### 1.4. Set up logging configuration
 - [ ] 1.4.1. Create logging configuration file
