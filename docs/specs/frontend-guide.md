@@ -1,3 +1,2673 @@
+
+
+class BackendSettingsInterface extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final isEditing = ref.watch(isEditingSettingsProvider);
+    
+    return Card(
+      margin: EdgeInsets.all(16),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.settings, color: Colors.grey.shade700),
+                SizedBox(width: 8),
+                Text(
+                  'Backend Settings',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Spacer(),
+                TextButton(
+                  onPressed: () => ref.read(isEditingSettingsProvider.notifier).state = !isEditing,
+                  child: Text(isEditing ? 'Cancel' : 'Edit'),
+                ),
+              ],
+            ),
+            
+            Divider(),
+            
+            // Connection settings
+            _buildConnectionSettings(context, ref, settings, isEditing),
+            
+            Divider(),
+            
+            // Generation defaults
+            _buildGenerationDefaults(context, ref, settings, isEditing),
+            
+            Divider(),
+            
+            // Remote backend settings
+            if (settings.useRemoteBackend || isEditing)
+              _buildRemoteSettings(context, ref, settings, isEditing),
+            
+            if (isEditing) ...[
+              Divider(),
+              
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => _saveSettings(context, ref),
+                    child: Text('Save Changes'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildConnectionSettings(
+    BuildContext context, 
+    WidgetRef ref, 
+    AppSettings settings, 
+    bool isEditing
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Connection',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: 16),
+        
+        // Backend mode
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text('Backend Mode'),
+          subtitle: Text(settings.useRemoteBackend ? 'Remote' : 'Local'),
+          trailing: isEditing
+              ? Switch(
+                  value: settings.useRemoteBackend,
+                  onChanged: (value) => ref.read(settingsProvider.notifier).updateUseRemote(value),
+                )
+              : null,
+        ),
+        
+        // Local URL
+        if (!settings.useRemoteBackend || isEditing)
+          isEditing
+              ? TextFormField(
+                  decoration: InputDecoration(
+                    labelText: 'Local InvokeAI URL',
+                    hintText: 'http://localhost:9090',
+                  ),
+                  initialValue: settings.localBackendUrl,
+                  onChanged: (value) => ref.read(settingsProvider.notifier).updateLocalUrl(value),
+                )
+              : ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Local InvokeAI URL'),
+                  subtitle: Text(settings.localBackendUrl),
+                ),
+        
+        SizedBox(height: 8),
+        
+        // Connection test button
+        OutlinedButton.icon(
+          icon: Icon(Icons.link),
+          label: Text('Test Connection'),
+          onPressed: () => _testConnection(context, ref),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildGenerationDefaults(
+    BuildContext context, 
+    WidgetRef ref, 
+    AppSettings settings, 
+    bool isEditing
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Generation Defaults',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: 16),
+        
+        // Default dimensions
+        if (isEditing) ...[
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  decoration: InputDecoration(
+                    labelText: 'Default Width',
+                  ),
+                  initialValue: settings.defaultWidth.toString(),
+                  keyboardType: TextInputType.number,
+                  onChanged: (value) => ref.read(settingsProvider.notifier)
+                      .updateDefaultWidth(int.tryParse(value) ?? 1024),
+                ),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  decoration: InputDecoration(
+                    labelText: 'Default Height',
+                  ),
+                  initialValue: settings.defaultHeight.toString(),
+                  keyboardType: TextInputType.number,
+                  onChanged: (value) => ref.read(settingsProvider.notifier)
+                      .updateDefaultHeight(int.tryParse(value) ?? 1024),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          
+          // Default steps
+          TextFormField(
+            decoration: InputDecoration(
+              labelText: 'Default Steps',
+            ),
+            initialValue: settings.defaultSteps.toString(),
+            keyboardType: TextInputType.number,
+            onChanged: (value) => ref.read(settingsProvider.notifier)
+                .updateDefaultSteps(int.tryParse(value) ?? 30),
+          ),
+          SizedBox(height: 16),
+          
+          // Default CFG Scale
+          TextFormField(
+            decoration: InputDecoration(
+              labelText: 'Default CFG Scale',
+            ),
+            initialValue: settings.defaultCfgScale.toString(),
+            keyboardType: TextInputType.numberWithOptions(decimal: true),
+            onChanged: (value) => ref.read(settingsProvider.notifier)
+                .updateDefaultCfgScale(double.tryParse(value) ?? 7.5),
+          ),
+          SizedBox(height: 16),
+          
+          // Default scheduler
+          DropdownButtonFormField<String>(
+            decoration: InputDecoration(
+              labelText: 'Default Scheduler',
+            ),
+            value: settings.defaultScheduler,
+            items: [
+              'euler',
+              'euler_ancestral',
+              'dpm_2',
+              'dpm_2_ancestral',
+              'dpmpp_2m',
+            ].map((scheduler) => DropdownMenuItem(
+              value: scheduler,
+              child: Text(scheduler),
+            )).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(settingsProvider.notifier).updateDefaultScheduler(value);
+              }
+            },
+          ),
+          SizedBox(height: 16),
+          
+          // Default batch size
+          TextFormField(
+            decoration: InputDecoration(
+              labelText: 'Default Batch Size',
+            ),
+            initialValue: settings.defaultBatchSize.toString(),
+            keyboardType: TextInputType.number,
+            onChanged: (value) => ref.read(settingsProvider.notifier)
+                .updateDefaultBatchSize(int.tryParse(value) ?? 4),
+          ),
+        ] else ...[
+          // Read-only view
+          _buildSettingRow('Default Dimensions', '${settings.defaultWidth}×${settings.defaultHeight}'),
+          _buildSettingRow('Default Steps', settings.defaultSteps.toString()),
+          _buildSettingRow('Default CFG Scale', settings.defaultCfgScale.toString()),
+          _buildSettingRow('Default Scheduler', settings.defaultScheduler),
+          _buildSettingRow('Default Batch Size', settings.defaultBatchSize.toString()),
+        ],
+      ],
+    );
+  }
+  
+  Widget _buildRemoteSettings(
+    BuildContext context, 
+    WidgetRef ref, 
+    AppSettings settings, 
+    bool isEditing
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Remote Backend Settings',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: 16),
+        
+        if (isEditing) ...[
+          // RunPod API Key
+          TextFormField(
+            decoration: InputDecoration(
+              labelText: 'RunPod API Key',
+              hintText: 'Enter your RunPod API key',
+            ),
+            initialValue: settings.runpodApiKey,
+            obscureText: true,
+            onChanged: (value) => ref.read(settingsProvider.notifier).updateRunpodApiKey(value),
+          ),
+          SizedBox(height: 16),
+          
+          // Remote backend URL
+          TextFormField(
+            decoration: InputDecoration(
+              labelText: 'Remote Backend URL',
+              hintText: 'https://{pod-id}-9090.proxy.runpod.net',
+            ),
+            initialValue: settings.remoteBackendUrl,
+            onChanged: (value) => ref.read(settingsProvider.notifier).updateRemoteUrl(value),
+          ),
+          SizedBox(height: 16),
+          
+          // Pod Type
+          DropdownButtonFormField<String>(
+            decoration: InputDecoration(
+              labelText: 'RunPod Type',
+            ),
+            value: settings.runpodPodType,
+            items: [
+              'NVIDIA A5000',
+              'NVIDIA RTX A4000',
+              'NVIDIA RTX 3090',
+              'NVIDIA RTX A6000',
+            ].map((type) => DropdownMenuItem(
+              value: type,
+              child: Text(type),
+            )).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(settingsProvider.notifier).updateRunpodPodType(value);
+              }
+            },
+          ),
+          SizedBox(height: 16),
+          
+          // Idle timeout
+          TextFormField(
+            decoration: InputDecoration(
+              labelText: 'Idle Timeout (minutes)',
+              hintText: 'Time before auto-shutdown',
+            ),
+            initialValue: settings.idleTimeoutMinutes.toString(),
+            keyboardType: TextInputType.number,
+            onChanged: (value) => ref.read(settingsProvider.notifier)
+                .updateIdleTimeout(int.tryParse(value) ?? 30),
+          ),
+        ] else ...[
+          // Read-only view
+          if (settings.runpodApiKey != null && settings.runpodApiKey!.isNotEmpty)
+            _buildSettingRow('RunPod API Key', '●●●●●●●●●●●●'),
+          else
+            _buildSettingRow('RunPod API Key', 'Not set'),
+            
+          _buildSettingRow('Remote Backend URL', settings.remoteBackendUrl ?? 'Not set'),
+          _buildSettingRow('RunPod Type', settings.runpodPodType),
+          _buildSettingRow('Idle Timeout', '${settings.idleTimeoutMinutes} minutes'),
+        ],
+        
+        SizedBox(height: 16),
+        
+        // Pod management buttons
+        if (settings.useRemoteBackend) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // View cost history
+              OutlinedButton.icon(
+                icon: Icon(Icons.history),
+                label: Text('Cost History'),
+                onPressed: () => _showCostHistory(context, ref),
+              ),
+              
+              SizedBox(width: 8),
+              
+              // Start/stop pod
+              Consumer(
+                builder: (context, ref, _) {
+                  final backendStatus = ref.watch(backendStatusProvider);
+                  return ElevatedButton.icon(
+                    icon: Icon(backendStatus.isConnected ? Icons.stop : Icons.play_arrow),
+                    label: Text(backendStatus.isConnected ? 'Stop Pod' : 'Start Pod'),
+                    style: ElevatedButton.styleFrom(
+                      primary: backendStatus.isConnected ? Colors.red : Colors.green,
+                    ),
+                    onPressed: () {
+                      if (backendStatus.isConnected) {
+                        ref.read(backendManagerProvider).stopPod();
+                      } else {
+                        ref.read(backendManagerProvider).startPod();
+                      }
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+  
+  Widget _buildSettingRow(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label:',
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _testConnection(BuildContext context, WidgetRef ref) {
+    final settings = ref.read(settingsProvider);
+    final backendManager = ref.read(backendManagerProvider);
+    
+    // Show testing dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Testing Connection'),
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Connecting to InvokeAI...'),
+          ],
+        ),
+      ),
+    );
+    
+    // Test connection
+    backendManager.testConnection().then((status) {
+      // Close dialog
+      Navigator.of(context).pop();
+      
+      // Show result
+      if (status.isConnected) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Connection Successful'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Successfully connected to InvokeAI.'),
+                SizedBox(height: 8),
+                Text('URL: ${status.baseUrl}'),
+                if (status.apiVersion != null)
+                  Text('API Version: ${status.apiVersion}'),
+                if (status.isRemote && status.podStatus != null)
+                  Text('Pod Status: ${status.podStatus}'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text('Close'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Connection Failed'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Failed to connect to InvokeAI.'),
+                SizedBox(height: 8),
+                Text('URL: ${status.baseUrl}'),
+                if (status.error != null)
+                  Text('Error: ${status.error}'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+    });
+  }
+  
+  void _saveSettings(BuildContext context, WidgetRef ref) {
+    // Validate settings
+    final settings = ref.read(settingsProvider);
+    
+    // Validate URLs
+    if (!_isValidUrl(settings.localBackendUrl)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invalid local backend URL')),
+      );
+      return;
+    }
+    
+    if (settings.useRemoteBackend) {
+      if (settings.remoteBackendUrl == null || !_isValidUrl(settings.remoteBackendUrl!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid remote backend URL')),
+        );
+        return;
+      }
+      
+      if (settings.runpodApiKey == null || settings.runpodApiKey!.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('RunPod API key is required for remote mode')),
+        );
+        return;
+      }
+    }
+    
+    // Save settings
+    ref.read(settingsProvider.notifier).saveSettings().then((_) {
+      // Exit editing mode
+      ref.read(isEditingSettingsProvider.notifier).state = false;
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Settings saved successfully')),
+      );
+      
+      // Update backend connection
+      ref.refresh(backendStatusProvider);
+    }).catchError((error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving settings: $error')),
+      );
+    });
+  }
+  
+  bool _isValidUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      return uri.scheme == 'http' || uri.scheme == 'https';
+    } catch (_) {
+      return false;
+    }
+  }
+  
+  void _showCostHistory(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Cost History'),
+        content: Container(
+          width: double.maxFinite,
+          child: Consumer(
+            builder: (context, ref, _) {
+              final costAsync = ref.watch(costHistoryProvider);
+              
+              return costAsync.when(
+                data: (history) {
+                  if (history.isEmpty) {
+                    return Center(
+                      child: Text('No cost history available'),
+                    );
+                  }
+                  
+                  // Calculate total cost
+                  final totalCost = history.fold<double>(
+                    0, (sum, record) => sum + record.cost
+                  );
+                  
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total Cost: \${totalCost.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: history.length,
+                          itemBuilder: (context, index) {
+                            final record = history[index];
+                            return ListTile(
+                              title: Text('Session on ${_formatDate(record.sessionDate)}'),
+                              subtitle: Text('Duration: ${_formatDuration(record.duration)}'),
+                              trailing: Text(
+                                '\${record.cost.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                loading: () => Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(
+                  child: Text('Error loading cost history: $error'),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  String _formatDate(DateTime date) {
+    return '${date.month}/${date.day}/${date.year}';
+  }
+  
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    
+    if (hours > 0) {
+      return '$hours hr ${minutes} min';
+    } else {
+      return '${minutes} min';
+    }
+  }
+}
+
+// Provider for the editing state
+final isEditingSettingsProvider = StateProvider<bool>((ref) => false);
+
+// App settings model
+class AppSettings {
+  final bool useRemoteBackend;
+  final String localBackendUrl;
+  final String? remoteBackendUrl;
+  final String? runpodApiKey;
+  final String runpodPodType;
+  final int idleTimeoutMinutes;
+  final int defaultWidth;
+  final int defaultHeight;
+  final int defaultSteps;
+  final double defaultCfgScale;
+  final String defaultScheduler;
+  final int defaultBatchSize;
+  
+  AppSettings({
+    this.useRemoteBackend = false,
+    this.localBackendUrl = 'http://localhost:9090',
+    this.remoteBackendUrl,
+    this.runpodApiKey,
+    this.runpodPodType = 'NVIDIA A5000',
+    this.idleTimeoutMinutes = 30,
+    this.defaultWidth = 1024,
+    this.defaultHeight = 1024,
+    this.defaultSteps = 30,
+    this.defaultCfgScale = 7.5,
+    this.defaultScheduler = 'euler',
+    this.defaultBatchSize = 4,
+  });
+  
+  AppSettings copyWith({
+    bool? useRemoteBackend,
+    String? localBackendUrl,
+    String? remoteBackendUrl,
+    String? runpodApiKey,
+    String? runpodPodType,
+    int? idleTimeoutMinutes,
+    int? defaultWidth,
+    int? defaultHeight,
+    int? defaultSteps,
+    double? defaultCfgScale,
+    String? defaultScheduler,
+    int? defaultBatchSize,
+  }) {
+    return AppSettings(
+      useRemoteBackend: useRemoteBackend ?? this.useRemoteBackend,
+      localBackendUrl: localBackendUrl ?? this.localBackendUrl,
+      remoteBackendUrl: remoteBackendUrl ?? this.remoteBackendUrl,
+      runpodApiKey: runpodApiKey ?? this.runpodApiKey,
+      runpodPodType: runpodPodType ?? this.runpodPodType,
+      idleTimeoutMinutes: idleTimeoutMinutes ?? this.idleTimeoutMinutes,
+      defaultWidth: defaultWidth ?? this.defaultWidth,
+      defaultHeight: defaultHeight ?? this.defaultHeight,
+      defaultSteps: defaultSteps ?? this.defaultSteps,
+      defaultCfgScale: defaultCfgScale ?? this.defaultCfgScale,
+      defaultScheduler: defaultScheduler ?? this.defaultScheduler,
+      defaultBatchSize: defaultBatchSize ?? this.defaultBatchSize,
+    );
+  }
+  
+  Map<String, dynamic> toJson() {
+    return {
+      'useRemoteBackend': useRemoteBackend,
+      'localBackendUrl': localBackendUrl,
+      'remoteBackendUrl': remoteBackendUrl,
+      'runpodApiKey': runpodApiKey,
+      'runpodPodType': runpodPodType,
+      'idleTimeoutMinutes': idleTimeoutMinutes,
+      'defaultWidth': defaultWidth,
+      'defaultHeight': defaultHeight,
+      'defaultSteps': defaultSteps,
+      'defaultCfgScale': defaultCfgScale,
+      'defaultScheduler': defaultScheduler,
+      'defaultBatchSize': defaultBatchSize,
+    };
+  }
+  
+  factory AppSettings.fromJson(Map<String, dynamic> json) {
+    return AppSettings(
+      useRemoteBackend: json['useRemoteBackend'] ?? false,
+      localBackendUrl: json['localBackendUrl'] ?? 'http://localhost:9090',
+      remoteBackendUrl: json['remoteBackendUrl'],
+      runpodApiKey: json['runpodApiKey'],
+      runpodPodType: json['runpodPodType'] ?? 'NVIDIA A5000',
+      idleTimeoutMinutes: json['idleTimeoutMinutes'] ?? 30,
+      defaultWidth: json['defaultWidth'] ?? 1024,
+      defaultHeight: json['defaultHeight'] ?? 1024,
+      defaultSteps: json['defaultSteps'] ?? 30,
+      defaultCfgScale: json['defaultCfgScale'] ?? 7.5,
+      defaultScheduler: json['defaultScheduler'] ?? 'euler',
+      defaultBatchSize: json['defaultBatchSize'] ?? 4,
+    );
+  }
+}
+
+// Settings service and provider
+class SettingsService extends StateNotifier<AppSettings> {
+  final SharedPreferences _prefs;
+  
+  SettingsService(this._prefs) : super(_loadSettings(_prefs));
+  
+  static AppSettings _loadSettings(SharedPreferences prefs) {
+    final settingsJson = prefs.getString('appSettings');
+    if (settingsJson == null) {
+      return AppSettings();
+    }
+    
+    try {
+      return AppSettings.fromJson(jsonDecode(settingsJson));
+    } catch (e) {
+      print('Error loading settings: $e');
+      return AppSettings();
+    }
+  }
+  
+  Future<void> saveSettings() async {
+    final settingsJson = jsonEncode(state.toJson());
+    await _prefs.setString('appSettings', settingsJson);
+  }
+  
+  void updateUseRemote(bool value) {
+    state = state.copyWith(useRemoteBackend: value);
+  }
+  
+  void updateLocalUrl(String value) {
+    state = state.copyWith(localBackendUrl: value);
+  }
+  
+  void updateRemoteUrl(String value) {
+    state = state.copyWith(remoteBackendUrl: value);
+  }
+  
+  void updateRunpodApiKey(String value) {
+    state = state.copyWith(runpodApiKey: value);
+  }
+  
+  void updateRunpodPodType(String value) {
+    state = state.copyWith(runpodPodType: value);
+  }
+  
+  void updateIdleTimeout(int value) {
+    state = state.copyWith(idleTimeoutMinutes: value);
+  }
+  
+  void updateDefaultWidth(int value) {
+    state = state.copyWith(defaultWidth: value);
+  }
+  
+  void updateDefaultHeight(int value) {
+    state = state.copyWith(defaultHeight: value);
+  }
+  
+  void updateDefaultSteps(int value) {
+    state = state.copyWith(defaultSteps: value);
+  }
+  
+  void updateDefaultCfgScale(double value) {
+    state = state.copyWith(defaultCfgScale: value);
+  }
+  
+  void updateDefaultScheduler(String value) {
+    state = state.copyWith(defaultScheduler: value);
+  }
+  
+  void updateDefaultBatchSize(int value) {
+    state = state.copyWith(defaultBatchSize: value);
+  }
+  
+  Future<List<CostRecord>> getCostHistory() async {
+    final historyJson = _prefs.getString('costHistory');
+    if (historyJson == null) {
+      return [];
+    }
+    
+    try {
+      final historyList = jsonDecode(historyJson) as List;
+      return historyList.map((item) {
+        return CostRecord(
+          podId: item['podId'],
+          sessionDate: DateTime.parse(item['sessionDate']),
+          duration: Duration(seconds: item['durationSeconds']),
+          cost: item['cost'].toDouble(),
+        );
+      }).toList();
+    } catch (e) {
+      print('Error loading cost history: $e');
+      return [];
+    }
+  }
+  
+  Future<void> addCostRecord(CostRecord record) async {
+    final history = await getCostHistory();
+    history.add(record);
+    
+    final historyJson = jsonEncode(history.map((record) {
+      return {
+        'podId': record.podId,
+        'sessionDate': record.sessionDate.toIso8601String(),
+        'durationSeconds': record.duration.inSeconds,
+        'cost': record.cost,
+      };
+    }).toList());
+    
+    await _prefs.setString('costHistory', historyJson);
+  }
+  
+  Future<void> clearCostHistory() async {
+    await _prefs.remove('costHistory');
+  }
+}
+
+// Provider for settings service
+final settingsServiceProvider = Provider<SettingsService>((ref) {
+  throw UnimplementedError(
+    'Initialize this provider with an override that provides SharedPreferences'
+  );
+});
+
+// Provider for settings state
+final settingsProvider = StateNotifierProvider<SettingsService, AppSettings>((ref) {
+  return ref.watch(settingsServiceProvider);
+});
+
+// Template settings section widget that can be used in other settings screens
+class SettingsSection extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+  
+  const SettingsSection({
+    Key? key,
+    required this.title,
+    required this.children,
+  }) : super(key: key);
+  
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: 16),
+        ...children,
+      ],
+    );
+  }
+}
+
+class NotificationManager extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifications = ref.watch(notificationProvider);
+    
+    if (notifications.isEmpty) {
+      return SizedBox.shrink();
+    }
+    
+    return Stack(
+      children: [
+        // Position the notifications at the bottom of the screen
+        Positioned(
+          bottom: 16,
+          right: 16,
+          width: 300,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (final notification in notifications)
+                NotificationCard(
+                  notification: notification,
+                  onDismiss: () => ref.read(notificationProvider.notifier).dismiss(notification.id),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class NotificationCard extends StatefulWidget {
+  final AppNotification notification;
+  final VoidCallback onDismiss;
+  
+  const NotificationCard({
+    Key? key,
+    required this.notification,
+    required this.onDismiss,
+  }) : super(key: key);
+  
+  @override
+  _NotificationCardState createState() => _NotificationCardState();
+}
+
+class _NotificationCardState extends State<NotificationCard> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: Duration(milliseconds: 300),
+      vsync: this,
+    );
+    
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    ));
+    
+    _slideAnimation = Tween<Offset>(
+      begin: Offset(1.0, 0.0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    ));
+    
+    _controller.forward();
+    
+    // Auto-dismiss after duration if specified
+    if (widget.notification.autoDismissDuration != null) {
+      Future.delayed(widget.notification.autoDismissDuration!, () {
+        if (mounted) {
+          _dismiss();
+        }
+      });
+    }
+  }
+  
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+  
+  void _dismiss() {
+    _controller.reverse().then((_) {
+      widget.onDismiss();
+    });
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return SlideTransition(
+      position: _slideAnimation,
+      child: FadeTransition(
+        opacity: _fadeAnimation,
+        child: Card(
+          elevation: 4,
+          margin: EdgeInsets.only(bottom: 8),
+          color: _getNotificationColor(widget.notification.type),
+          child: ListTile(
+            leading: Icon(
+              _getNotificationIcon(widget.notification.type),
+              color: Colors.white,
+            ),
+            title: Text(
+              widget.notification.title,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            subtitle: widget.notification.message != null
+                ? Text(
+                    widget.notification.message!,
+                    style: TextStyle(color: Colors.white.withOpacity(0.9)),
+                  )
+                : null,
+            trailing: IconButton(
+              icon: Icon(Icons.close, color: Colors.white),
+              onPressed: _dismiss,
+            ),
+            onTap: widget.notification.onTap,
+          ),
+        ),
+      ),
+    );
+  }
+  
+  Color _getNotificationColor(NotificationType type) {
+    switch (type) {
+      case NotificationType.success:
+        return Colors.green;
+      case NotificationType.info:
+        return Colors.blue;
+      case NotificationType.warning:
+        return Colors.orange;
+      case NotificationType.error:
+        return Colors.red;
+    }
+  }
+  
+  IconData _getNotificationIcon(NotificationType type) {
+    switch (type) {
+      case NotificationType.success:
+        return Icons.check_circle;
+      case NotificationType.info:
+        return Icons.info;
+      case NotificationType.warning:
+        return Icons.warning;
+      case NotificationType.error:
+        return Icons.error;
+    }
+  }
+}
+
+// Notification models and providers
+enum NotificationType {
+  success,
+  info,
+  warning,
+  error
+}
+
+class AppNotification {
+  final String id;
+  final String title;
+  final String? message;
+  final NotificationType type;
+  final Duration? autoDismissDuration;
+  final VoidCallback? onTap;
+  
+  AppNotification({
+    required this.title,
+    this.message,
+    required this.type,
+    this.autoDismissDuration = const Duration(seconds: 5),
+    this.onTap,
+  }) : id = uuid.v4();
+}
+
+class NotificationService extends StateNotifier<List<AppNotification>> {
+  NotificationService() : super([]);
+  
+  void show({
+    required String title,
+    String? message,
+    required NotificationType type,
+    Duration? autoDismissDuration,
+    VoidCallback? onTap,
+  }) {
+    final notification = AppNotification(
+      title: title,
+      message: message,
+      type: type,
+      autoDismissDuration: autoDismissDuration,
+      onTap: onTap,
+    );
+    
+    state = [...state, notification];
+  }
+  
+  void showSuccess(String title, {String? message, VoidCallback? onTap}) {
+    show(
+      title: title,
+      message: message,
+      type: NotificationType.success,
+      onTap: onTap,
+    );
+  }
+  
+  void showInfo(String title, {String? message, VoidCallback? onTap}) {
+    show(
+      title: title,
+      message: message,
+      type: NotificationType.info,
+      onTap: onTap,
+    );
+  }
+  
+  void showWarning(String title, {String? message, VoidCallback? onTap}) {
+    show(
+      title: title,
+      message: message,
+      type: NotificationType.warning,
+      onTap: onTap,
+    );
+  }
+  
+  void showError(String title, {String? message, VoidCallback? onTap}) {
+    show(
+      title: title,
+      message: message,
+      type: NotificationType.error,
+      autoDismissDuration: null, // Errors don't auto-dismiss
+      onTap: onTap,
+    );
+  }
+  
+  void dismiss(String id) {
+    state = state.where((notification) => notification.id != id).toList();
+  }
+  
+  void dismissAll() {
+    state = [];
+  }
+}
+
+final notificationProvider = StateNotifierProvider<NotificationService, List<AppNotification>>((ref) {
+  return NotificationService();
+});
+
+class GenerationQueueMonitor extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final queueStatus = ref.watch(queueStatusProvider);
+    
+    // Don't show anything if there are no active items
+    if (queueStatus.pending == 0 && queueStatus.inProgress == 0) {
+      return SizedBox.shrink();
+    }
+    
+    return Card(
+      margin: EdgeInsets.all(16),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.queue, color: Colors.blue),
+                SizedBox(width: 8),
+                Text(
+                  'Generation Queue',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            
+            Divider(),
+            
+            // Queue statistics
+            _buildQueueStatRow(
+              context, 
+              'Pending', 
+              queueStatus.pending, 
+              Colors.orange
+            ),
+            
+            _buildQueueStatRow(
+              context, 
+              'In Progress', 
+              queueStatus.inProgress, 
+              Colors.blue
+            ),
+            
+            _buildQueueStatRow(
+              context, 
+              'Completed', 
+              queueStatus.completed, 
+              Colors.green
+            ),
+            
+            if (queueStatus.failed > 0)
+              _buildQueueStatRow(
+                context, 
+                'Failed', 
+                queueStatus.failed, 
+                Colors.red
+              ),
+            
+            Divider(),
+            
+            // Active operations
+            if (queueStatus.activeOperations.isNotEmpty)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Active Operations',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  ...queueStatus.activeOperations.map((op) => 
+                    _buildActiveOperationRow(context, op)
+                  ),
+                ],
+              ),
+            
+            SizedBox(height: 16),
+            
+            // Actions
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  icon: Icon(Icons.refresh),
+                  label: Text('Refresh'),
+                  onPressed: () => ref.refresh(queueStatusProvider),
+                ),
+                
+                if (queueStatus.pending > 0 || queueStatus.inProgress > 0)
+                  Padding(
+                    padding: EdgeInsets.only(left: 8),
+                    child: OutlinedButton.icon(
+                      icon: Icon(Icons.cancel),
+                      label: Text('Cancel All'),
+                      onPressed: () => _showCancelConfirmation(context, ref),
+                      style: OutlinedButton.styleFrom(
+                        primary: Colors.red,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildQueueStatRow(
+    BuildContext context, 
+    String label, 
+    int count, 
+    Color color
+  ) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          SizedBox(width: 8),
+          Text(label, style: TextStyle(color: Colors.grey.shade700)),
+          Spacer(),
+          Text(
+            count.toString(),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: count > 0 ? color : Colors.grey,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildActiveOperationRow(
+    BuildContext context, 
+    QueueOperation operation
+  ) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          // Operation type icon
+          Icon(
+            operation.type == QueueOperationType.generation
+                ? Icons.image
+                : Icons.download,
+            size: 16,
+            color: Colors.grey,
+          ),
+          
+          SizedBox(width: 8),
+          
+          // Operation description
+          Expanded(
+            child: Text(
+              operation.description,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          
+          SizedBox(width: 16),
+          
+          // Progress indicator
+          if (operation.progress != null)
+            Container(
+              width: 60,
+              child: LinearProgressIndicator(
+                value: operation.progress,
+                backgroundColor: Colors.grey.shade200,
+                valueColor: AlwaysStoppedAnimation(Colors.blue),
+              ),
+            ),
+          
+          SizedBox(width: 8),
+          
+          // Progress text
+          if (operation.progress != null)
+            Text(
+              '${(operation.progress! * 100).toStringAsFixed(0)}%',
+              style: TextStyle(fontSize: 12),
+            ),
+          
+          SizedBox(width: 8),
+          
+          // Cancel button
+          IconButton(
+            icon: Icon(Icons.close, size: 16),
+            onPressed: operation.onCancel,
+            padding: EdgeInsets.zero,
+            constraints: BoxConstraints(),
+            splashRadius: 16,
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showCancelConfirmation(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Cancel All Operations?'),
+        content: Text(
+          'This will cancel all pending and in-progress generation operations. '
+          'This action cannot be undone.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('No, Keep Processing'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              ref.read(generationQueueProvider.notifier).cancelAll();
+            },
+            child: Text('Yes, Cancel All'),
+            style: TextButton.styleFrom(primary: Colors.red),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Queue status provider and related classes
+final queueStatusProvider = Provider<QueueStatus>((ref) {
+  final sessions = ref.watch(generationSessionProvider).steps;
+  final retrievals = ref.watch(retrievalQueueProvider);
+  
+  int pending = 0;
+  int inProgress = 0;
+  int completed = 0;
+  int failed = 0;
+  
+  List<QueueOperation> activeOperations = [];
+  
+  // Count generation operations
+  for (final step in sessions) {
+    switch (step.status) {
+      case 'pending':
+        pending++;
+        activeOperations.add(
+          QueueOperation(
+            id: step.id,
+            type: QueueOperationType.generation,
+            description: 'Generating: ${_truncatePrompt(step.prompt)}',
+            progress: null,
+            onCancel: () => ref.read(generationStepProvider.notifier)
+                .cancelStep(step.id),
+          ),
+        );
+        break;
+      case 'processing':
+        inProgress++;
+        activeOperations.add(
+          QueueOperation(
+            id: step.id,
+            type: QueueOperationType.generation,
+            description: 'Generating: ${_truncatePrompt(step.prompt)}',
+            progress: step.progress,
+            onCancel: () => ref.read(generationStepProvider.notifier)
+                .cancelStep(step.id),
+          ),
+        );
+        break;
+      case 'completed':
+        completed++;
+        break;
+      case 'failed':
+        failed++;
+        break;
+    }
+  }
+  
+  // Count retrieval operations
+  for (final retrieval in retrievals) {
+    switch (retrieval.status) {
+      case 'pending':
+        pending++;
+        activeOperations.add(
+          QueueOperation(
+            id: retrieval.id,
+            type: QueueOperationType.retrieval,
+            description: 'Retrieving image: ${retrieval.imageId}',
+            progress: null,
+            onCancel: () => ref.read(retrievalQueueProvider.notifier)
+                .cancelRetrieval(retrieval.id),
+          ),
+        );
+        break;
+      case 'processing':
+        inProgress++;
+        activeOperations.add(
+          QueueOperation(
+            id: retrieval.id,
+            type: QueueOperationType.retrieval,
+            description: 'Retrieving image: ${retrieval.imageId}',
+            progress: retrieval.progress,
+            onCancel: () => ref.read(retrievalQueueProvider.notifier)
+                .cancelRetrieval(retrieval.id),
+          ),
+        );
+        break;
+      // Other statuses are tracked in retrieval-specific monitors
+    }
+  }
+  
+  return QueueStatus(
+    pending: pending,
+    inProgress: inProgress,
+    completed: completed,
+    failed: failed,
+    activeOperations: activeOperations,
+  );
+});
+
+String _truncatePrompt(String prompt, {int maxLength = 30}) {
+  if (prompt.length <= maxLength) return prompt;
+  return prompt.substring(0, maxLength - 3) + '...';
+}
+
+class QueueStatus {
+  final int pending;
+  final int inProgress;
+  final int completed;
+  final int failed;
+  final List<QueueOperation> activeOperations;
+  
+  QueueStatus({
+    required this.pending,
+    required this.inProgress,
+    required this.completed,
+    required this.failed,
+    required this.activeOperations,
+  });
+}
+
+enum QueueOperationType {
+  generation,
+  retrieval
+}
+
+class QueueOperation {
+  final String id;
+  final QueueOperationType type;
+  final String description;
+  final double? progress;
+  final VoidCallback onCancel;
+  
+  QueueOperation({
+    required this.id,
+    required this.type,
+    required this.description,
+    this.progress,
+    required this.onCancel,
+  });
+}
+
+// Generation queue provider for queue management
+final generationQueueProvider = StateNotifierProvider<GenerationQueueNotifier, QueueState>((ref) {
+  return GenerationQueueNotifier(ref);
+});
+
+class QueueState {
+  final List<String> pendingStepIds;
+  final List<String> processingStepIds;
+  
+  QueueState({
+    this.pendingStepIds = const [],
+    this.processingStepIds = const [],
+  });
+  
+  QueueState copyWith({
+    List<String>? pendingStepIds,
+    List<String>? processingStepIds,
+  }) {
+    return QueueState(
+      pendingStepIds: pendingStepIds ?? this.pendingStepIds,
+      processingStepIds: processingStepIds ?? this.processingStepIds,
+    );
+  }
+}
+
+class GenerationQueueNotifier extends StateNotifier<QueueState> {
+  final Ref _ref;
+  
+  GenerationQueueNotifier(this._ref) : super(QueueState());
+  
+  void addToPending(String stepId) {
+    state = state.copyWith(
+      pendingStepIds: [...state.pendingStepIds, stepId],
+    );
+  }
+  
+  void moveToProcessing(String stepId) {
+    state = state.copyWith(
+      pendingStepIds: state.pendingStepIds.where((id) => id != stepId).toList(),
+      processingStepIds: [...state.processingStepIds, stepId],
+    );
+  }
+  
+  void removeFromQueue(String stepId) {
+    state = state.copyWith(
+      pendingStepIds: state.pendingStepIds.where((id) => id != stepId).toList(),
+      processingStepIds: state.processingStepIds.where((id) => id != stepId).toList(),
+    );
+  }
+  
+  void cancelStep(String stepId) {
+    final stepNotifier = _ref.read(generationStepProvider.notifier);
+    stepNotifier.cancelStep(stepId);
+    removeFromQueue(stepId);
+  }
+  
+  void cancelAll() {
+    // Cancel all pending steps
+    for (final stepId in state.pendingStepIds) {
+      _ref.read(generationStepProvider.notifier).cancelStep(stepId);
+    }
+    
+    // Try to cancel processing steps (may or may not work depending on state)
+    for (final stepId in state.processingStepIds) {
+      _ref.read(generationStepProvider.notifier).cancelStep(stepId);
+    }
+    
+    // Clear the queue
+    state = QueueState();
+  }
+}
+
+class BackendStatusWidget extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final backendStatus = ref.watch(backendStatusProvider);
+    
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Backend Status',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            _buildStatusRow(
+              context,
+              'Connection:',
+              backendStatus.isConnected ? 'Connected' : 'Disconnected',
+              backendStatus.isConnected ? Colors.green : Colors.red,
+            ),
+            _buildStatusRow(
+              context,
+              'Mode:',
+              backendStatus.isRemote ? 'Remote' : 'Local',
+              Colors.blue,
+            ),
+            if (backendStatus.isRemote) ...[
+              _buildStatusRow(
+                context,
+                'Pod Status:',
+                backendStatus.podStatus ?? 'Unknown',
+                _getPodStatusColor(backendStatus.podStatus),
+              ),
+              if (backendStatus.currentCost != null)
+                _buildStatusRow(
+                  context,
+                  'Current Cost:',
+                  '\$${backendStatus.currentCost!.toStringAsFixed(2)}',
+                  Colors.orange,
+                ),
+              if (backendStatus.uptime != null)
+                _buildStatusRow(
+                  context,
+                  'Uptime:',
+                  _formatDuration(backendStatus.uptime!),
+                  Colors.blue,
+                ),
+            ],
+            SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // Mode switch
+                OutlinedButton.icon(
+                  icon: Icon(backendStatus.isRemote ? Icons.computer : Icons.cloud),
+                  label: Text(backendStatus.isRemote ? 'Switch to Local' : 'Switch to Remote'),
+                  onPressed: () => ref.read(backendManagerProvider).switchMode(!backendStatus.isRemote),
+                ),
+                
+                SizedBox(width: 8),
+                
+                // Connect/disconnect button
+                if (backendStatus.isRemote)
+                  ElevatedButton.icon(
+                    icon: Icon(backendStatus.isConnected ? Icons.stop : Icons.play_arrow),
+                    label: Text(backendStatus.isConnected ? 'Stop Pod' : 'Start Pod'),
+                    style: ElevatedButton.styleFrom(
+                      primary: backendStatus.isConnected ? Colors.red : Colors.green,
+                    ),
+                    onPressed: () {
+                      if (backendStatus.isConnected) {
+                        ref.read(backendManagerProvider).stopPod();
+                      } else {
+                        ref.read(backendManagerProvider).startPod();
+                      }
+                    },
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildStatusRow(BuildContext context, String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Text(label, style: TextStyle(fontWeight: FontWeight.w500)),
+          SizedBox(width: 8),
+          Text(
+            value,
+            style: TextStyle(color: color, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Color _getPodStatusColor(String? status) {
+    if (status == null) return Colors.grey;
+    
+    switch (status.toUpperCase()) {
+      case 'RUNNING':
+        return Colors.green;
+      case 'STARTING':
+        return Colors.orange;
+      case 'STOPPED':
+        return Colors.red;
+      case 'ERROR':
+        return Colors.red.shade700;
+      default:
+        return Colors.grey;
+    }
+  }
+  
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    
+    if (hours > 0) {
+      return '$hours hr ${minutes} min';
+    } else {
+      return '${minutes} min';
+    }
+  }
+}
+
+// Extended view with more details
+class DetailedBackendStatusWidget extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final backendStatus = ref.watch(backendStatusProvider);
+    final costHistory = ref.watch(costHistoryProvider);
+    
+    return Card(
+      margin: EdgeInsets.all(16),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'InvokeAI Backend',
+              style: Theme.of(context).textTheme.headline6,
+            ),
+            
+            SizedBox(height: 16),
+            
+            // Connection status card
+            _buildConnectionStatusCard(context, backendStatus),
+            
+            SizedBox(height: 16),
+            
+            // Remote pod details (if in remote mode)
+            if (backendStatus.isRemote)
+              _buildRemotePodDetails(context, backendStatus),
+            
+            // Action buttons
+            SizedBox(height: 16),
+            _buildActionButtons(context, ref, backendStatus),
+            
+            // Cost history (if available)
+            if (backendStatus.isRemote && costHistory.isNotEmpty)
+              _buildCostHistory(context, costHistory),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildConnectionStatusCard(BuildContext context, BackendStatus status) {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: status.isConnected ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: status.isConnected ? Colors.green : Colors.red,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            status.isConnected ? Icons.check_circle : Icons.error,
+            color: status.isConnected ? Colors.green : Colors.red,
+            size: 48,
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  status.isConnected ? 'Connected' : 'Disconnected',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: status.isConnected ? Colors.green : Colors.red,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Mode: ${status.isRemote ? 'Remote' : 'Local'}',
+                  style: TextStyle(fontSize: 14),
+                ),
+                Text(
+                  'URL: ${status.baseUrl}',
+                  style: TextStyle(fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (status.apiVersion != null)
+                  Text(
+                    'API Version: ${status.apiVersion}',
+                    style: TextStyle(fontSize: 14),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildRemotePodDetails(BuildContext context, BackendStatus status) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Remote Pod Details',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: 8),
+        Table(
+          columnWidths: {
+            0: FlexColumnWidth(1),
+            1: FlexColumnWidth(2),
+          },
+          children: [
+            TableRow(
+              children: [
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Text('Pod ID:'),
+                ),
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Text(status.podId ?? 'N/A'),
+                ),
+              ],
+            ),
+            TableRow(
+              children: [
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Text('Status:'),
+                ),
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    status.podStatus ?? 'Unknown',
+                    style: TextStyle(
+                      color: _getPodStatusColor(status.podStatus),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (status.lastActivity != null)
+              TableRow(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: Text('Last Activity:'),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: Text(_formatDateTime(status.lastActivity!)),
+                  ),
+                ],
+              ),
+            if (status.uptime != null)
+              TableRow(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: Text('Uptime:'),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: Text(_formatDuration(status.uptime!)),
+                  ),
+                ],
+              ),
+            if (status.currentCost != null)
+              TableRow(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: Text('Current Cost:'),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      '\$${status.currentCost!.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildActionButtons(
+    BuildContext context, 
+    WidgetRef ref, 
+    BackendStatus status
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        // Refresh status button
+        OutlinedButton.icon(
+          icon: Icon(Icons.refresh),
+          label: Text('Refresh Status'),
+          onPressed: () => ref.refresh(backendStatusProvider),
+        ),
+        
+        SizedBox(width: 8),
+        
+        // Mode switch button
+        OutlinedButton.icon(
+          icon: Icon(status.isRemote ? Icons.computer : Icons.cloud),
+          label: Text(status.isRemote ? 'Switch to Local' : 'Switch to Remote'),
+          onPressed: () => ref.read(backendManagerProvider).switchMode(!status.isRemote),
+        ),
+        
+        SizedBox(width: 8),
+        
+        // Connect/disconnect button (remote mode only)
+        if (status.isRemote)
+          ElevatedButton.icon(
+            icon: Icon(status.isConnected ? Icons.stop : Icons.play_arrow),
+            label: Text(status.isConnected ? 'Stop Pod' : 'Start Pod'),
+            style: ElevatedButton.styleFrom(
+              primary: status.isConnected ? Colors.red : Colors.green,
+            ),
+            onPressed: () {
+              if (status.isConnected) {
+                ref.read(backendManagerProvider).stopPod();
+              } else {
+                ref.read(backendManagerProvider).startPod();
+              }
+            },
+          ),
+      ],
+    );
+  }
+  
+  Widget _buildCostHistory(BuildContext context, List<CostRecord> history) {
+    // Calculate total cost
+    final totalCost = history.fold<double>(
+      0, (sum, record) => sum + record.cost
+    );
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 24),
+        Text(
+          'Cost History',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: 8),
+        Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  'Total Spend: \${totalCost.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange,
+                  ),
+                ),
+                SizedBox(height: 16),
+                
+                // Cost history list (last 5 sessions)
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  itemCount: history.length > 5 ? 5 : history.length,
+                  itemBuilder: (context, index) {
+                    final record = history[index];
+                    return ListTile(
+                      leading: Icon(Icons.access_time),
+                      title: Text('Session on ${_formatDate(record.sessionDate)}'),
+                      subtitle: Text('Duration: ${_formatDuration(record.duration)}'),
+                      trailing: Text(
+                        '\${record.cost.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                
+                if (history.length > 5) ...[
+                  SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => _showFullCostHistory(context, history),
+                    child: Text('View Full History'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  void _showFullCostHistory(BuildContext context, List<CostRecord> history) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Cost History'),
+        content: Container(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: history.length,
+            itemBuilder: (context, index) {
+              final record = history[index];
+              return ListTile(
+                title: Text('Session on ${_formatDate(record.sessionDate)}'),
+                subtitle: Text('Duration: ${_formatDuration(record.duration)}'),
+                trailing: Text(
+                  '\${record.cost.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  String _formatDate(DateTime date) {
+    return '${date.month}/${date.day}/${date.year}';
+  }
+  
+  String _formatDateTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+    
+    if (difference.inDays < 1) {
+      if (difference.inHours < 1) {
+        if (difference.inMinutes < 1) {
+          return 'Just now';
+        }
+        return '${difference.inMinutes} minute${difference.inMinutes > 1 ? 's' : ''} ago';
+      }
+      return '${difference.inHours} hour${difference.inHours > 1 ? 's' : ''} ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} day${difference.inDays > 1 ? 's' : ''} ago';
+    } else {
+      return _formatDate(dateTime);
+    }
+  }
+  
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    
+    if (hours > 0) {
+      return '$hours hr ${minutes} min';
+    } else {
+      return '${minutes} min';
+    }
+  }
+  
+  Color _getPodStatusColor(String? status) {
+    if (status == null) return Colors.grey;
+    
+    switch (status.toUpperCase()) {
+      case 'RUNNING':
+        return Colors.green;
+      case 'STARTING':
+        return Colors.orange;
+      case 'STOPPED':
+        return Colors.red;
+      case 'ERROR':
+        return Colors.red.shade700;
+      default:
+        return Colors.grey;
+    }
+  }
+}
+
+// Cost history provider
+final costHistoryProvider = FutureProvider<List<CostRecord>>((ref) async {
+  final settingsService = ref.watch(settingsServiceProvider);
+  return settingsService.getCostHistory();
+});
+
+// Cost record class
+class CostRecord {
+  final String podId;
+  final DateTime sessionDate;
+  final Duration duration;
+  final double cost;
+  
+  CostRecord({
+    required this.podId,
+    required this.sessionDate,
+    required this.duration,
+    required this.cost,
+  });
+}
+
+class RetrievalStatusWidget extends ConsumerWidget {
+  final String stepId;
+  
+  const RetrievalStatusWidget({
+    Key? key, 
+    required this.stepId,
+  }) : super(key: key);
+  
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(retrievalStatusProvider(stepId));
+    
+    // Don't show anything if there are no retrievals or all are complete
+    if (status.total == 0 || (status.isComplete && !status.hasFailures)) {
+      return SizedBox.shrink();
+    }
+    
+    return Card(
+      margin: EdgeInsets.all(16),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  status.hasFailures 
+                    ? Icons.error_outline 
+                    : Icons.download_rounded,
+                  color: status.hasFailures ? Colors.red : Colors.blue,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'Image Retrieval Status',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Spacer(),
+                Text(
+                  '${status.completed} of ${status.total} images retrieved',
+                  style: TextStyle(
+                    color: status.hasFailures ? Colors.red : Colors.blue,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            
+            SizedBox(height: 12),
+            
+            // Progress bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: status.progressPercentage / 100,
+                backgroundColor: Colors.grey.shade200,
+                valueColor: AlwaysStoppedAnimation(
+                  status.hasFailures ? Colors.orange : Colors.blue,
+                ),
+                minHeight: 8,
+              ),
+            ),
+            
+            SizedBox(height: 12),
+            
+            // Additional status details
+            _buildStatusDetails(context, status),
+            
+            // Action buttons for failed retrievals
+            if (status.hasFailures) ...[
+              SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    icon: Icon(Icons.refresh),
+                    label: Text('Retry Failed'),
+                    onPressed: () => _retryFailedRetrievals(context, ref),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildStatusDetails(BuildContext context, RetrievalStatus status) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _buildStatusItem(
+          context, 
+          'Completed', 
+          status.completed.toString(), 
+          Colors.green
+        ),
+        _buildStatusItem(
+          context, 
+          'Pending', 
+          status.pending.toString(), 
+          Colors.blue
+        ),
+        if (status.hasFailures)
+          _buildStatusItem(
+            context, 
+            'Failed', 
+            status.failed.toString(), 
+            Colors.red
+          ),
+      ],
+    );
+  }
+  
+  Widget _buildStatusItem(
+    BuildContext context, 
+    String label, 
+    String value, 
+    Color color
+  ) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: 12,
+          ),
+        ),
+        SizedBox(height: 4),
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+            border: Border.all(color: color, width: 2),
+          ),
+          child: Center(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  void _retryFailedRetrievals(BuildContext context, WidgetRef ref) {
+    ref.read(generationStepProvider.notifier).retryFailedRetrievals(stepId);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Retrying failed image retrievals...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+}
+
+// Detailed retrieval info widget for the alternatives view
+class RetrievalInfoWidget extends ConsumerWidget {
+  final String stepId;
+  
+  const RetrievalInfoWidget({
+    Key? key,
+    required this.stepId,
+  }) : super(key: key);
+  
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(retrievalStatusProvider(stepId));
+    final step = ref.watch(generationStepProvider).currentStep;
+    
+    if (step == null || status.total == 0) {
+      return SizedBox.shrink();
+    }
+    
+    return ExpansionTile(
+      title: Text('Retrieval Details'),
+      initiallyExpanded: status.hasFailures,
+      leading: Icon(
+        status.hasFailures ? Icons.error_outline : Icons.info_outline,
+        color: status.hasFailures ? Colors.red : Colors.blue,
+      ),
+      children: [
+        Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Image Retrieval Status',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              
+              // Status rows
+              _buildStatusRow(
+                'Completed', 
+                status.completed, 
+                status.total, 
+                Colors.green
+              ),
+              _buildStatusRow(
+                'Pending', 
+                status.pending, 
+                status.total, 
+                Colors.blue
+              ),
+              _buildStatusRow(
+                'Failed', 
+                status.failed, 
+                status.total, 
+                Colors.red
+              ),
+              
+              SizedBox(height: 16),
+              
+              // Correlation ID info
+              if (step.correlationId != null) ...[
+                Text(
+                  'Correlation ID:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 4),
+                SelectableText(
+                  step.correlationId!,
+                  style: TextStyle(fontFamily: 'monospace'),
+                ),
+              ],
+              
+              SizedBox(height: 16),
+              
+              // Batch info
+              Text(
+                'Batch Information:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 4),
+              Text('Batch ID: ${step.batch_id}'),
+              Text('Created: ${_formatDateTime(step.created_at)}'),
+              Text('Status: ${step.status}'),
+              
+              if (status.hasFailures) ...[
+                SizedBox(height: 16),
+                Center(
+                  child: ElevatedButton.icon(
+                    icon: Icon(Icons.refresh),
+                    label: Text('Retry Failed Retrievals'),
+                    onPressed: () => ref.read(generationStepProvider.notifier)
+                        .retryFailedRetrievals(stepId),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildStatusRow(String label, int count, int total, Color color) {
+    final percentage = total > 0 ? (count / total * 100).toStringAsFixed(0) : '0';
+    
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('$label:'),
+              Text(
+                '$count / $total ($percentage%)',
+                style: TextStyle(color: color, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: total > 0 ? count / total : 0,
+              backgroundColor: Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation(color),
+              minHeight: 4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  String _formatDateTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+    
+    if (difference.inDays < 1) {
+      if (difference.inHours < 1) {
+        if (difference.inMinutes < 1) {
+          return 'Just now';
+        }
+        return '${difference.inMinutes} minute${difference.inMinutes > 1 ? 's' : ''} ago';
+      }
+      return '${difference.inHours} hour${difference.inHours > 1 ? 's' : ''} ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} day${difference.inDays > 1 ? 's' : ''} ago';
+    } else {
+      final date = dateTime.toLocal();
+      return '${date.month}/${date.day}/${date.year}';
+    }
+  }
+}
+
+class AlternativesGridWidget extends ConsumerWidget {
+  final GenerationStep step;
+  final List<StepAlternative> alternatives;
+  
+  const AlternativesGridWidget({
+    Key? key,
+    required this.step,
+    required this.alternatives,
+  }) : super(key: key);
+  
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header with info
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              Text(
+                'Select an image to continue',
+                style: Theme.of(context).textTheme.headline6,
+              ),
+              Spacer(),
+              TextButton.icon(
+                icon: Icon(Icons.delete_outline),
+                label: Text('Discard All'),
+                onPressed: () => _showDiscardDialog(context, ref),
+              ),
+            ],
+          ),
+        ),
+        
+        // Grid of alternatives
+        Expanded(
+          child: GridView.builder(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 1.0,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: alternatives.length,
+            itemBuilder: (context, index) {
+              final alternative = alternatives[index];
+              return _buildAlternativeItem(context, ref, alternative);
+            },
+          ),
+        ),
+        
+        // Generation info
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Generation Info', style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text('Prompt: ${step.prompt}'),
+                  if (step.negative_prompt != null && step.negative_prompt!.isNotEmpty)
+                    Text('Negative Prompt: ${step.negative_prompt}'),
+                  SizedBox(height: 8),
+                  Text('Model: ${step.model_key}'),
+                  Text('Steps: ${step.parameters['steps']}'),
+                  Text('CFG Scale: ${step.parameters['cfg_scale']}'),
+                  Text('Scheduler: ${step.parameters['scheduler']}'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildAlternativeItem(BuildContext context, WidgetRef ref, StepAlternative alternative) {
+    return GestureDetector(
+      onTap: () => _selectAlternative(context, ref, alternative),
+      child: Card(
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: alternative.selected 
+                ? Theme.of(context).primaryColor 
+                : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                child: ProgressiveImageWidget(
+                  photoId: alternative.image_id,
+                  enableAnimation: true,
+                ),
+              ),
+            ),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(8)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  alternative.selected
+                      ? Text('Selected', style: TextStyle(fontWeight: FontWeight.bold))
+                      : Text('Tap to select'),
+                  IconButton(
+                    icon: Icon(alternative.selected ? Icons.check_circle : Icons.check_circle_outline),
+                    color: alternative.selected ? Theme.of(context).primaryColor : Colors.grey,
+                    onPressed: () => _selectAlternative(context, ref, alternative),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  void _selectAlternative(BuildContext context, WidgetRef ref, StepAlternative alternative) {
+    // Check if trying to reselect already selected alternative
+    if (alternative.selected) return;
+    
+    // Check if this would cause history loss
+    final hasSubsequentSteps = ref.read(generationSessionProvider).steps
+        .any((s) => s.parent_id == step.id);
+    
+    if (hasSubsequentSteps) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Confirm Selection'),
+          content: Text(
+            'Selecting a different image will delete all subsequent steps. '
+            'Are you sure you want to continue?'
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                ref.read(generationStepProvider.notifier).selectAlternative(
+                  step.id,
+                  alternative.image_id,
+                );
+              },
+              child: Text('Confirm'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // No history loss, directly select
+      ref.read(generationStepProvider.notifier).selectAlternative(
+        step.id,
+        alternative.image_id,
+      );
+    }
+  }
+  
+  void _showDiscardDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Discard All Images?'),
+        content: Text(
+          'This will discard all generated images and return to the editor. '
+          'This action cannot be undone.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              ref.read(generationStepProvider.notifier).discardStep(step.id);
+            },
+            child: Text('Discard All'),
+            style: TextButton.styleFrom(primary: Colors.red),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 ```
 // Comparison mode enum and provider
 enum ComparisonMode {
