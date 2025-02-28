@@ -40,11 +40,11 @@
 - [x] 1.5.5. Create config validation function
 
 ### 1.6. Project structure setup
-- [ ] 1.6.1. Create app directory structure
-- [ ] 1.6.2. Create initial __init__.py files
-- [ ] 1.6.3. Setup main.py with FastAPI instance
-- [ ] 1.6.4. Setup database connection module
-- [ ] 1.6.5. Create placeholder directories for models, repositories, etc.
+- [x] 1.6.1. Create app directory structure
+- [x] 1.6.2. Create initial __init__.py files
+- [x] 1.6.3. Setup main.py with FastAPI instance
+- [x] 1.6.4. Setup database connection module
+- [x] 1.6.5. Create placeholder directories for models, repositories, etc.
 
 ### 1.7. Basic application scaffolding
 - [ ] 1.7.1. Create basic FastAPI application entry point
