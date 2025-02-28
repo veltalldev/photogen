@@ -22,14 +22,14 @@ class Settings(BaseSettings):
     
     # Security
     SECRET_KEY: str = secrets.token_urlsafe(32)
-    ALLOWED_ORIGINS: List[str]
+    ALLOWED_ORIGINS: str
     
     # File Storage
     UPLOAD_DIR: Path
     MAX_UPLOAD_SIZE: int
 
     class Config:
-        env_file = ".env"
+        env_file = "../.env"
         env_file_encoding = "utf-8"
 
 # Create global settings instance
