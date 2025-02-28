@@ -27,10 +27,10 @@
 - [x] 1.3.5. Verify database connection
 
 ### 1.4. Set up logging configuration
-- [ ] 1.4.1. Create logging configuration file
-- [ ] 1.4.2. Configure different log levels
-- [ ] 1.4.3. Set up log file rotation
-- [ ] 1.4.4. Configure console output formatting
+- [x] 1.4.1. Create logging configuration file
+- [x] 1.4.2. Configure different log levels
+- [x] 1.4.3. Set up log file rotation
+- [x] 1.4.4. Configure console output formatting
 
 ### 1.5. Create environment configuration structure
 - [ ] 1.5.1. Create .env file template
