@@ -106,3 +106,39 @@ def get_engine(database_url: Optional[str] = None, **kwargs) -> Engine:
     except SQLAlchemyError as e:
         logger.error(f"Failed to create database engine: {e}")
         raise
+    
+def get_engine(database_url: Optional[str] = None, **kwargs) -> Engine:
+    """
+    Create a SQLAlchemy engine for database connections with connection pooling.
+    
+    Args:
+        database_url: Database connection URL, defaults to environment variable
+        **kwargs: Additional engine configuration parameters
+    
+    Returns:
+        Engine: SQLAlchemy engine instance with connection pooling
+    """
+    if database_url is None:
+        database_url = get_database_url()
+    
+    # Set default parameters if not provided
+    engine_kwargs = {
+        "pool_pre_ping": True,  # Verify connections before use
+        "pool_size": 5,         # Number of connections to keep open
+        "max_overflow": 10,     # Max number of connections above pool_size
+        "pool_timeout": 30,     # Seconds to wait for a connection
+        "pool_recycle": 1800,   # Recycle connections after 30 minutes
+        "echo": False           # Don't log all SQL
+    }
+    
+    # Update with user-provided parameters
+    engine_kwargs.update(kwargs)
+    
+    # Create and return engine
+    try:
+        engine = create_engine(database_url, **engine_kwargs)
+        logger.info(f"Database engine created with connection pooling for {database_url.split('@')[-1]}")
+        return engine
+    except SQLAlchemyError as e:
+        logger.error(f"Failed to create database engine: {e}")
+        raise
