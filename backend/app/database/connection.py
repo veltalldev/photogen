@@ -232,3 +232,73 @@ def get_db_session() -> Session:
         Session: SQLAlchemy database session
     """
     return SessionFactory()
+
+class DatabaseSession:
+    """
+    Context manager for database sessions.
+    
+    Ensures that sessions are properly closed and that transactions
+    are committed or rolled back as appropriate.
+    """
+    
+    def __init__(self, session_factory=None):
+        """
+        Initialize the context manager.
+        
+        Args:
+            session_factory: Session factory to use, defaults to global SessionFactory
+        """
+        if session_factory is None:
+            session_factory = SessionFactory
+        self.session_factory = session_factory
+        self.session = None
+    
+    def __enter__(self) -> Session:
+        """
+        Enter the context, creating a new session.
+        
+        Returns:
+            Session: Active database session
+        """
+        self.session = self.session_factory()
+        return self.session
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Exit the context, closing the session.
+        
+        Args:
+            exc_type: Exception type, if an exception occurred
+            exc_val: Exception value, if an exception occurred
+            exc_tb: Exception traceback, if an exception occurred
+        """
+        if exc_type is not None:
+            # An exception occurred, roll back transaction
+            logger.debug(f"Rolling back transaction due to {exc_type.__name__}: {exc_val}")
+            self.session.rollback()
+        else:
+            # No exception, commit transaction
+            try:
+                self.session.commit()
+            except SQLAlchemyError as e:
+                logger.error(f"Failed to commit transaction: {e}")
+                self.session.rollback()
+                raise
+        
+        # Always close session
+        self.session.close()
+
+
+# Convenience function for using the context manager
+def db_session():
+    """
+    Get a database session context manager.
+    
+    Usage:
+        with db_session() as session:
+            # Use session here
+    
+    Returns:
+        DatabaseSession: Database session context manager
+    """
+    return DatabaseSession()
