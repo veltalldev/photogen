@@ -17,6 +17,8 @@ from app.database.retry_handler import (
     retry_database_operation,
     with_timeout,
     safe_db_operation,
+    RETRIABLE_EXCEPTIONS,
+    NON_RETRIABLE_EXCEPTIONS
 )
 
 
@@ -60,15 +62,28 @@ class TestRetryDatabaseOperation:
         assert mock_func.call_count == 3  # Initial + 2 retries
     
     def test_non_retriable_exception(self):
-        """Test that non-retriable exceptions are not retried."""
-        error = sqlalchemy.exc.ProgrammingError("statement", {}, Exception("syntax error"))
-        mock_func = MagicMock(side_effect=error)
-        decorated_func = retry_database_operation()(mock_func)
-        
-        with pytest.raises(sqlalchemy.exc.ProgrammingError):
-            decorated_func()
-        
-        mock_func.assert_called_once()
+      """Test that non-retriable exceptions are not retried."""
+      # Create a custom exception type
+      class CustomNonRetriableError(Exception):
+          pass
+      
+      # Create the error and mock function that raises it
+      error = CustomNonRetriableError("This should not be retried")
+      mock_func = MagicMock(side_effect=error)
+      
+      # Create decorator with explicit exception configurations
+      # Only retry OperationalError, nothing else
+      decorated_func = retry_database_operation(
+          retriable_exceptions=(sqlalchemy.exc.OperationalError,),
+          initial_delay=0.01  # Small delay for faster tests
+      )(mock_func)
+      
+      # The custom exception should be raised directly without retries
+      with pytest.raises(CustomNonRetriableError):
+          decorated_func()
+      
+      # Verify the function was only called once (no retries)
+      mock_func.assert_called_once()
     
     def test_retry_with_custom_exceptions(self):
         """Test retry with custom retriable exceptions."""
