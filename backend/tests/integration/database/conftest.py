@@ -25,7 +25,7 @@ def get_test_database_url():
     
     if not test_db_url:
         # Default to local test database if not specified
-        test_db_url = "postgresql://postgres:thesephinx@localhost/photo_gallery_test"
+        test_db_url = "postgresql://postgres:postgres@localhost/photo_gallery_test"
         logger.warning(f"TEST_DATABASE_URL not set. Using default: {test_db_url}")
     
     return test_db_url

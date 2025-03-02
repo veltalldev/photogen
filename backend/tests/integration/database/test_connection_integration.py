@@ -18,7 +18,7 @@ from app.database.connection import (
 @pytest.fixture
 def test_db_url():
     """Get test database URL from environment or use default."""
-    return os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:thesephinx@localhost/photo_gallery_test")
+    return os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost/photo_gallery_test")
 
 
 @pytest.fixture
