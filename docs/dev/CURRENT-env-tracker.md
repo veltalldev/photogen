@@ -2,21 +2,21 @@
 
 ## ENV-DB: PostgreSQL Database Setup
 - [ ] ENV-DB-1. Database connection setup
-  - [ ] ENV-DB-1.1. Install PostgreSQL dependencies
-  - [ ] ENV-DB-1.2. Create database connection module
-  - [ ] ENV-DB-1.3. Implement connection pooling
-  - [ ] ENV-DB-1.4. Add connection error handling
-  - [ ] ENV-DB-1.5. Create session factory
-  - [ ] ENV-DB-1.6. Implement context manager for sessions
+  - [x] ENV-DB-1.1. Install PostgreSQL dependencies
+  - [x] ENV-DB-1.2. Create database connection module
+  - [x] ENV-DB-1.3. Implement connection pooling
+  - [x] ENV-DB-1.4. Add connection error handling
+  - [x] ENV-DB-1.5. Create session factory
+  - [x] ENV-DB-1.6. Implement context manager for sessions
   - [ ] ENV-DB-1.7. Add timeout and retry logic
   - [ ] ENV-DB-1.8. Document database connection parameters
 
 - [ ] ENV-DB-2. Test database configuration
-  - [ ] ENV-DB-2.1. Create test database creation script
-  - [ ] ENV-DB-2.2. Implement test database connection
-  - [ ] ENV-DB-2.3. Create fixtures for test database
+  - [x] ENV-DB-2.1. Create test database creation script
+  - [x] ENV-DB-2.2. Implement test database connection
+  - [x] ENV-DB-2.3. Create fixtures for test database
   - [ ] ENV-DB-2.4. Add test database cleanup functions
-  - [ ] ENV-DB-2.5. Implement transaction isolation for tests
+  - [x] ENV-DB-2.5. Implement transaction isolation for tests
   - [ ] ENV-DB-2.6. Create test session factory
   - [ ] ENV-DB-2.7. Document test database conventions
 

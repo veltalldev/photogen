@@ -8,11 +8,11 @@ from unittest.mock import patch, MagicMock
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.app.database.connection import (
+from app.database.connection import (
     get_database_url,
     create_connection_string,
     get_engine,
-    test_connection,
+    check_connection,
     get_session_factory,
     DatabaseSession
 )
@@ -58,7 +58,7 @@ class TestDatabaseConnection(unittest.TestCase):
         self.assertIn("connect_timeout=10", url)
         self.assertIn("application_name=test", url)
     
-    @patch("backend.app.database.connection.create_engine")
+    @patch("app.database.connection.create_engine")
     def test_get_engine(self, mock_create_engine):
         """Test creating SQLAlchemy engine."""
         mock_engine = MagicMock()
@@ -69,7 +69,7 @@ class TestDatabaseConnection(unittest.TestCase):
         mock_create_engine.assert_called_once()
         self.assertEqual(engine, mock_engine)
     
-    @patch("backend.app.database.connection.create_engine")
+    @patch("app.database.connection.create_engine")
     def test_get_engine_error(self, mock_create_engine):
         """Test error handling when creating engine."""
         mock_create_engine.side_effect = SQLAlchemyError("Test error")
@@ -83,7 +83,7 @@ class TestDatabaseConnection(unittest.TestCase):
         mock_conn = MagicMock()
         mock_engine.connect.return_value.__enter__.return_value = mock_conn
         
-        result = test_connection(mock_engine)
+        result = check_connection(mock_engine)
         
         self.assertTrue(result)
         mock_engine.connect.assert_called_once()
@@ -94,7 +94,7 @@ class TestDatabaseConnection(unittest.TestCase):
         mock_engine = MagicMock()
         mock_engine.connect.side_effect = SQLAlchemyError("Test error")
         
-        result = test_connection(mock_engine)
+        result = check_connection(mock_engine)
         
         self.assertFalse(result)
     
