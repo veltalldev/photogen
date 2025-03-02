@@ -1,0 +1,25 @@
+# Web Framework and Server (1.2.2)
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# Database and ORM (1.2.3, 1.2.4)
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+alembic>=1.12.0
+
+# HTTP Client (1.2.5)
+httpx>=0.25.0
+
+# Data Validation (1.2.6)
+pydantic>=2.4.0
+pydantic-settings>=2.0.0
+
+# Testing (1.2.7)
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Image Processing (1.2.8)
+Pillow>=10.0.0
+
+# Utilities (1.2.9)
+python-dotenv>=1.0.0
