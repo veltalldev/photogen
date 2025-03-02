@@ -111,3 +111,6 @@ bower_components/
 *.rar
 *.tar
 *.zip
+
+# Global
+**/__pycache__/
