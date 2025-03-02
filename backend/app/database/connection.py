@@ -142,3 +142,54 @@ def get_engine(database_url: Optional[str] = None, **kwargs) -> Engine:
     except SQLAlchemyError as e:
         logger.error(f"Failed to create database engine: {e}")
         raise
+    
+def test_connection(engine: Engine) -> bool:
+    """
+    Test the database connection.
+    
+    Args:
+        engine: SQLAlchemy engine instance
+    
+    Returns:
+        bool: True if connection successful, False otherwise
+    """
+    try:
+        # Execute a simple query to test connection
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        logger.info("Database connection test successful")
+        return True
+    except SQLAlchemyError as e:
+        logger.error(f"Database connection test failed: {e}")
+        return False
+
+
+def handle_connection_error(func):
+    """
+    Decorator to handle database connection errors.
+    
+    Args:
+        func: Function to decorate
+    
+    Returns:
+        Function: Decorated function with error handling
+    """
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except SQLAlchemyError as e:
+            error_class = e.__class__.__name__
+            logger.error(f"Database error ({error_class}): {str(e)}")
+            
+            # Specific error handling based on error type
+            if "connection" in str(e).lower() or "timeout" in str(e).lower():
+                logger.error("Database connection error: Check that the database is running and accessible")
+            elif "authentication" in str(e).lower():
+                logger.error("Database authentication error: Check username and password")
+            elif "permission" in str(e).lower():
+                logger.error("Database permission error: Check user permissions")
+            
+            # Re-raise the exception
+            raise
+    
+    return wrapper
