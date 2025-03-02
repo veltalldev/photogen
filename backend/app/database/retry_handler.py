@@ -52,6 +52,7 @@ def retry_database_operation(
     max_delay: float = DEFAULT_MAX_DELAY,
     backoff_factor: float = DEFAULT_BACKOFF_FACTOR,
     retriable_exceptions: tuple = RETRIABLE_EXCEPTIONS,
+    non_retriable_exceptions: tuple = NON_RETRIABLE_EXCEPTIONS,
 ) -> Callable[[F], F]:
     """
     Decorator to retry database operations with exponential backoff.
@@ -62,6 +63,7 @@ def retry_database_operation(
         max_delay: Maximum delay between retries in seconds
         backoff_factor: Factor by which the delay increases
         retriable_exceptions: Tuple of exceptions that should trigger a retry
+        non_retriable_exceptions: Tuple of exceptions that should never be retried
 
     Returns:
         Decorated function with retry logic
@@ -76,7 +78,19 @@ def retry_database_operation(
             for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
-                except retriable_exceptions as e:
+                except Exception as e:
+                    # First check if this is a non-retriable exception
+                    if isinstance(e, non_retriable_exceptions):
+                        logger.error(f"Non-retriable database error: {str(e)}")
+                        raise
+                    
+                    # Then check if this is a retriable exception
+                    if not isinstance(e, retriable_exceptions):
+                        # For exceptions that are neither retriable nor non-retriable, re-raise
+                        logger.error(f"Unexpected database error: {str(e)}")
+                        raise
+                    
+                    # If we get here, this is a retriable exception
                     last_exception = e
                     
                     # Don't sleep on the last attempt
@@ -97,10 +111,6 @@ def retry_database_operation(
                         logger.error(
                             f"Database operation failed after {max_retries+1} attempts: {str(e)}"
                         )
-                except NON_RETRIABLE_EXCEPTIONS as e:
-                    # For non-retriable exceptions, log and re-raise immediately
-                    logger.error(f"Non-retriable database error: {str(e)}")
-                    raise
 
             # If we've exhausted all retries, raise the last exception
             if last_exception:
@@ -111,7 +121,6 @@ def retry_database_operation(
             
         return cast(F, wrapper)
     return decorator
-
 
 def with_timeout(timeout: float = DEFAULT_TIMEOUT) -> Callable[[F], F]:
     """

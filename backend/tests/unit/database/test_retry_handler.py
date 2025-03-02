@@ -61,29 +61,41 @@ class TestRetryDatabaseOperation:
         
         assert mock_func.call_count == 3  # Initial + 2 retries
     
-    def test_non_retriable_exception(self):
-      """Test that non-retriable exceptions are not retried."""
-      # Create a custom exception type
-      class CustomNonRetriableError(Exception):
-          pass
-      
-      # Create the error and mock function that raises it
-      error = CustomNonRetriableError("This should not be retried")
-      mock_func = MagicMock(side_effect=error)
-      
-      # Create decorator with explicit exception configurations
-      # Only retry OperationalError, nothing else
-      decorated_func = retry_database_operation(
-          retriable_exceptions=(sqlalchemy.exc.OperationalError,),
-          initial_delay=0.01  # Small delay for faster tests
-      )(mock_func)
-      
-      # The custom exception should be raised directly without retries
-      with pytest.raises(CustomNonRetriableError):
-          decorated_func()
-      
-      # Verify the function was only called once (no retries)
-      mock_func.assert_called_once()
+    def test_non_retriable_exceptions(self):
+        """Test that non-retriable exceptions are not retried."""
+        # Test with an exception that's explicitly in NON_RETRIABLE_EXCEPTIONS
+        data_error = sqlalchemy.exc.DataError("Invalid data format", None, None)
+        mock_func = MagicMock(side_effect=data_error)
+        
+        decorated_func = retry_database_operation(
+            initial_delay=0.01  # Small delay for faster tests
+        )(mock_func)
+        
+        with pytest.raises(sqlalchemy.exc.DataError):
+            decorated_func()
+        
+        # Verify it was only called once (no retries)
+        mock_func.assert_called_once()
+        
+        # Reset the mock
+        mock_func.reset_mock()
+        
+        # Now test with a custom exception that's not in either list
+        class CustomException(Exception):
+            pass
+        
+        custom_error = CustomException("Custom exception")
+        mock_func = MagicMock(side_effect=custom_error)
+        
+        decorated_func = retry_database_operation(
+            initial_delay=0.01
+        )(mock_func)
+        
+        with pytest.raises(CustomException):
+            decorated_func()
+        
+        # Verify it was only called once (no retries)
+        mock_func.assert_called_once()
     
     def test_retry_with_custom_exceptions(self):
         """Test retry with custom retriable exceptions."""
