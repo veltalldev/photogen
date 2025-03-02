@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any, Optional
 from urllib.parse import quote_plus
 
-from sqlalchemy import create_engine, Engine
+from sqlalchemy import create_engine, Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -74,38 +74,6 @@ def create_connection_string(
     
     return connection_string
 
-
-def get_engine(database_url: Optional[str] = None, **kwargs) -> Engine:
-    """
-    Create a SQLAlchemy engine for database connections.
-    
-    Args:
-        database_url: Database connection URL, defaults to environment variable
-        **kwargs: Additional engine configuration parameters
-    
-    Returns:
-        Engine: SQLAlchemy engine instance
-    """
-    if database_url is None:
-        database_url = get_database_url()
-    
-    # Set default parameters if not provided
-    engine_kwargs = {
-        "pool_pre_ping": True,
-        "echo": False
-    }
-    
-    # Update with user-provided parameters
-    engine_kwargs.update(kwargs)
-    
-    # Create and return engine
-    try:
-        engine = create_engine(database_url, **engine_kwargs)
-        logger.info(f"Database engine created for {database_url.split('@')[-1]}")
-        return engine
-    except SQLAlchemyError as e:
-        logger.error(f"Failed to create database engine: {e}")
-        raise
     
 def get_engine(database_url: Optional[str] = None, **kwargs) -> Engine:
     """
@@ -143,7 +111,7 @@ def get_engine(database_url: Optional[str] = None, **kwargs) -> Engine:
         logger.error(f"Failed to create database engine: {e}")
         raise
     
-def test_connection(engine: Engine) -> bool:
+def check_connection(engine: Engine) -> bool:
     """
     Test the database connection.
     
@@ -156,7 +124,7 @@ def test_connection(engine: Engine) -> bool:
     try:
         # Execute a simple query to test connection
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         logger.info("Database connection test successful")
         return True
     except SQLAlchemyError as e:
