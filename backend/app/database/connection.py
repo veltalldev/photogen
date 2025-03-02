@@ -193,3 +193,42 @@ def handle_connection_error(func):
             raise
     
     return wrapper
+
+def get_session_factory(engine: Optional[Engine] = None) -> sessionmaker:
+    """
+    Create a session factory for database sessions.
+    
+    Args:
+        engine: SQLAlchemy engine instance, created if not provided
+    
+    Returns:
+        sessionmaker: SQLAlchemy session factory
+    """
+    if engine is None:
+        engine = get_engine()
+    
+    # Create session factory
+    session_factory = sessionmaker(
+        bind=engine,
+        autocommit=False,
+        autoflush=False,
+        expire_on_commit=False
+    )
+    
+    logger.debug("Session factory created")
+    return session_factory
+
+
+# Create default engine and session factory
+default_engine = get_engine()
+SessionFactory = get_session_factory(default_engine)
+
+
+def get_db_session() -> Session:
+    """
+    Get a new database session.
+    
+    Returns:
+        Session: SQLAlchemy database session
+    """
+    return SessionFactory()
