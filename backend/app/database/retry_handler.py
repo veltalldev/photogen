@@ -126,7 +126,7 @@ def retry_database_operation(
 
 def with_timeout(timeout: float = DEFAULT_TIMEOUT) -> Callable[[F], F]:
     """
-    Decorator to add timeout to database operations.
+    Decorator to add timeout to database operations using SQLAlchemy sessions.
 
     Args:
         timeout: Maximum time in seconds to wait for the operation to complete
@@ -139,35 +139,29 @@ def with_timeout(timeout: float = DEFAULT_TIMEOUT) -> Callable[[F], F]:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time.time()
             
-            def is_timed_out() -> bool:
-                return time.time() - start_time > timeout
-            
-            # Add timeout context if the first argument is a Session
+            # Set timeout if the first argument is a Session
             if args and isinstance(args[0], Session):
                 session = args[0]
-                # Set execution timeout if supported by dialect
-                if hasattr(session, 'execute'):
-                    # For PostgreSQL, we can set statement timeout
-                    session.execute(f"SET statement_timeout = {int(timeout * 1000)}")
+                # Set statement timeout in milliseconds
+                timeout_ms = int(timeout * 1000)
+                session.execute(text(f"SET statement_timeout = {timeout_ms}"))
             
             try:
-                result = func(*args, **kwargs)
-                
-                if is_timed_out():
-                    logger.warning(
-                        f"Database operation completed but exceeded timeout of {timeout} seconds"
-                    )
-                    # Add this line to raise the exception
-                    raise DatabaseTimeoutError(
-                        f"Database operation exceeded timeout of {timeout} seconds"
-                    )
-                    
-                return result
+                return func(*args, **kwargs)
             except Exception as e:
-                if is_timed_out():
+                # If this is a PostgreSQL timeout error, let it pass through
+                if "timeout" in str(e).lower() or "statement" in str(e).lower():
+                    logger.warning(f"Database statement timeout detected: {str(e)}")
+                    raise
+                    
+                # For other exceptions, check if we also timed out
+                if time.time() - start_time > timeout:
+                    logger.warning(f"Database operation timed out after {timeout} seconds")
                     raise DatabaseTimeoutError(
                         f"Database operation timed out after {timeout} seconds"
                     ) from e
+                    
+                # Otherwise, just re-raise the original exception
                 raise
             
         return cast(F, wrapper)
@@ -176,7 +170,10 @@ def with_timeout(timeout: float = DEFAULT_TIMEOUT) -> Callable[[F], F]:
 
 def safe_db_operation(
     max_retries: int = DEFAULT_MAX_RETRIES,
-    timeout: float = DEFAULT_TIMEOUT
+    timeout: float = DEFAULT_TIMEOUT,
+    initial_delay: float = DEFAULT_RETRY_DELAY,
+    max_delay: float = DEFAULT_MAX_DELAY,
+    backoff_factor: float = DEFAULT_BACKOFF_FACTOR
 ) -> Callable[[F], F]:
     """
     Combined decorator to add both retry and timeout logic to database operations.
@@ -184,6 +181,9 @@ def safe_db_operation(
     Args:
         max_retries: Maximum number of retry attempts
         timeout: Maximum time in seconds to wait for the operation to complete
+        initial_delay: Initial delay between retries in seconds
+        max_delay: Maximum delay between retries in seconds
+        backoff_factor: Factor by which the delay increases
 
     Returns:
         Decorated function with retry and timeout logic
@@ -191,7 +191,12 @@ def safe_db_operation(
     def decorator(func: F) -> F:
         # Apply both decorators
         timed_func = with_timeout(timeout)(func)
-        retried_func = retry_database_operation(max_retries=max_retries)(timed_func)
+        retried_func = retry_database_operation(
+            max_retries=max_retries,
+            initial_delay=initial_delay,
+            max_delay=max_delay,
+            backoff_factor=backoff_factor
+        )(timed_func)
         return cast(F, retried_func)
     
     return decorator

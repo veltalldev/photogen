@@ -151,8 +151,8 @@ class TestWithTimeout:
     @patch('time.time')
     def test_operation_timeout(self, mock_time):
         """Test that DatabaseTimeoutError is raised when the operation times out."""
-        # Mock time.time to return sequence of values indicating timeout
-        mock_time.side_effect = [0, 2.0]  # Start time, check time (exceeds timeout)
+        # Make mock_time return 0 first, then 2.0 for all subsequent calls
+        mock_time.side_effect = [0] + [2.0] * 10  # Provide enough values for logging too
         
         mock_func = MagicMock(side_effect=Exception("Operation failed"))
         decorated_func = with_timeout(timeout=1.0)(mock_func)
@@ -160,20 +160,25 @@ class TestWithTimeout:
         with pytest.raises(DatabaseTimeoutError):
             decorated_func()
     
-    def test_statement_timeout_for_session(self):
+    @patch('app.database.retry_handler.text')
+    def test_statement_timeout_for_session(self, mock_text):
         """Test that statement_timeout is set for PostgreSQL sessions."""
+        # Make mock_text return the input string or another recognizable value
+        mock_text.return_value = "TEXT_CLAUSE"
+        
         mock_session = MagicMock(spec=Session)
         mock_execute = MagicMock()
         mock_session.execute = mock_execute
-        
+
         def func_with_session(session):
             return "success"
-        
+
         decorated_func = with_timeout(timeout=2.0)(func_with_session)
         result = decorated_func(mock_session)
-        
+
         assert result == "success"
-        mock_execute.assert_called_once_with("SET statement_timeout = 2000")
+        mock_text.assert_called_once_with("SET statement_timeout = 2000")
+        mock_execute.assert_called_once_with("TEXT_CLAUSE")
 
 
 class TestSafeDatabaseOperation:
@@ -210,11 +215,29 @@ class TestSafeDatabaseOperation:
             assert result == "success"
             assert calls[0] == 2  # Function should be called twice
     
+    # @patch('time.time')
+    # def test_timeout_takes_precedence(self, mock_time):
+    #     """Test that timeout takes precedence over retries."""
+    #     # Mock time.time() to simulate timeout
+    #     mock_time.side_effect = [0, 2, 2]  # Start time, check time (exceeds timeout)
+        
+    #     # Create a function that always fails with a retriable error
+    #     mock_func = MagicMock(
+    #         side_effect=sqlalchemy.exc.OperationalError("statement", {}, Exception("connection error"))
+    #     )
+        
+    #     decorated_func = safe_db_operation(max_retries=3, timeout=1.0)(mock_func)
+        
+    #     with pytest.raises(DatabaseTimeoutError):
+    #         decorated_func()
+        
+    #     assert mock_func.call_count == 1  # Function should be called only once before timeout
+
     @patch('time.time')
     def test_timeout_takes_precedence(self, mock_time):
         """Test that timeout takes precedence over retries."""
-        # Mock time.time() to simulate timeout
-        mock_time.side_effect = [0, 2, 2]  # Start time, check time (exceeds timeout)
+        # Provide enough time values for all calls including logging
+        mock_time.side_effect = [0] + [2.0] * 20
         
         # Create a function that always fails with a retriable error
         mock_func = MagicMock(
@@ -225,5 +248,5 @@ class TestSafeDatabaseOperation:
         
         with pytest.raises(DatabaseTimeoutError):
             decorated_func()
-        
-        assert mock_func.call_count == 1  # Function should be called only once before timeout
+
+        assert mock_func.call_count == 1
