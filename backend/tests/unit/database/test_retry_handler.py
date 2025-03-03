@@ -3,6 +3,7 @@
 Unit tests for database retry handler functionality.
 """
 
+from itertools import chain, repeat
 import time
 import unittest
 from unittest.mock import MagicMock, patch
@@ -215,29 +216,10 @@ class TestSafeDatabaseOperation:
             assert result == "success"
             assert calls[0] == 2  # Function should be called twice
     
-    # @patch('time.time')
-    # def test_timeout_takes_precedence(self, mock_time):
-    #     """Test that timeout takes precedence over retries."""
-    #     # Mock time.time() to simulate timeout
-    #     mock_time.side_effect = [0, 2, 2]  # Start time, check time (exceeds timeout)
-        
-    #     # Create a function that always fails with a retriable error
-    #     mock_func = MagicMock(
-    #         side_effect=sqlalchemy.exc.OperationalError("statement", {}, Exception("connection error"))
-    #     )
-        
-    #     decorated_func = safe_db_operation(max_retries=3, timeout=1.0)(mock_func)
-        
-    #     with pytest.raises(DatabaseTimeoutError):
-    #         decorated_func()
-        
-    #     assert mock_func.call_count == 1  # Function should be called only once before timeout
-
     @patch('time.time')
     def test_timeout_takes_precedence(self, mock_time):
-        """Test that timeout takes precedence over retries."""
-        # Provide enough time values for all calls including logging
-        mock_time.side_effect = [0] + [2.0] * 20
+        # First call returns 0, then all subsequent calls return 2.0
+        mock_time.side_effect = chain([0], repeat(2.0))
         
         # Create a function that always fails with a retriable error
         mock_func = MagicMock(
@@ -248,5 +230,5 @@ class TestSafeDatabaseOperation:
         
         with pytest.raises(DatabaseTimeoutError):
             decorated_func()
-
+        
         assert mock_func.call_count == 1

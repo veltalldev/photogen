@@ -150,7 +150,7 @@ def with_timeout(timeout: float = DEFAULT_TIMEOUT) -> Callable[[F], F]:
                 return func(*args, **kwargs)
             except Exception as e:
                 # If this is a PostgreSQL timeout error, let it pass through
-                if "timeout" in str(e).lower() or "statement" in str(e).lower():
+                if "timeout" in str(e).lower():
                     logger.warning(f"Database statement timeout detected: {str(e)}")
                     raise
                     
