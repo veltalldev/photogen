@@ -5,11 +5,13 @@ Implements timeout and retry mechanisms for database connections and operations.
 """
 
 import logging
+import threading
 import time
 from functools import wraps
 from typing import Any, Callable, Type, TypeVar, cast
 
 import sqlalchemy.exc
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -37,7 +39,7 @@ NON_RETRIABLE_EXCEPTIONS = (
 
 
 class DatabaseTimeoutError(Exception):
-    """Raised when a database operation times out."""
+    """Exception raised when a database operation times out."""
     pass
 
 
@@ -154,6 +156,10 @@ def with_timeout(timeout: float = DEFAULT_TIMEOUT) -> Callable[[F], F]:
                 if is_timed_out():
                     logger.warning(
                         f"Database operation completed but exceeded timeout of {timeout} seconds"
+                    )
+                    # Add this line to raise the exception
+                    raise DatabaseTimeoutError(
+                        f"Database operation exceeded timeout of {timeout} seconds"
                     )
                     
                 return result
