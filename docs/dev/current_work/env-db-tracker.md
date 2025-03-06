@@ -10,12 +10,12 @@ This tracker reorganizes the database test configuration tasks based on their lo
   - [x] 1.1.3. Identify gaps in current test setup
   - [x] 1.1.4. Determine additional fixtures needed
 
-- [ ] 1.2. **Create table dependency map** (ENV-DB-2.4.3.1)
-  - [ ] 1.2.1. Query database schema for table relationships
-  - [ ] 1.2.2. Extract foreign key constraints
-  - [ ] 1.2.3. Build dependency graph
-  - [ ] 1.2.4. Determine proper truncation order
-  - [ ] 1.2.5. Test dependency resolution logic
+- [x] 1.2. **Create table dependency map** (ENV-DB-2.4.3.1)
+  - [x] 1.2.1. Query database schema for table relationships
+  - [x] 1.2.2. Extract foreign key constraints
+  - [x] 1.2.3. Build dependency graph
+  - [x] 1.2.4. Determine proper truncation order
+  - [x] 1.2.5. Test dependency resolution logic
 
 ## Phase 2: Core Implementation
 
