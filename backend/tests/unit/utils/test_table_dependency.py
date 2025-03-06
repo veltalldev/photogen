@@ -87,8 +87,6 @@ class TestTableDependencyMap:
         # Get table truncation order: child first
         topological_order = dependency_map.get_truncation_order()
         truncation_order = list(reversed(topological_order))
-
-        # print(topological_order)
         
         # Verify order guarantees
         # 1. Comments should come before posts and users
@@ -97,8 +95,6 @@ class TestTableDependencyMap:
         
         # Convert to indices for easier comparison
         indices = {table: i for i, table in enumerate(truncation_order)}
-
-        # print(indices)
         
         # Check constraints
         assert indices["comments"] < indices["posts"]
@@ -109,7 +105,7 @@ class TestTableDependencyMap:
         
         # Verify complete order
         expected_order = ["comments", "post_tags", "posts", "tags", "users"]
-        # assert set(truncation_order) == set(expected_order)  # All tables should be included
+        assert set(truncation_order) == set(expected_order)  # All tables should be included
         
         # Verify the order is valid
         assert dependency_map.verify_truncation_order(truncation_order)
@@ -126,7 +122,7 @@ class TestTableDependencyMap:
         dependency_map = TableDependencyMap(engine, inspector=mock_inspector)
         
         # Verify dependent tables
-        assert dependency_map.get_dependent_tables("users") == {"posts", "comments"}
+        assert dependency_map.get_dependent_tables("users") == {"posts", "comments", "post_tags"}
         assert dependency_map.get_dependent_tables("posts") == {"comments", "post_tags"}
         assert dependency_map.get_dependent_tables("comments") == set()
         assert dependency_map.get_dependent_tables("tags") == {"post_tags"}
