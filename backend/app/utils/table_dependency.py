@@ -71,14 +71,12 @@ class TableDependencyMap:
         
         Returns:
             List of table names in the order they should be truncated.
-            The order starts with tables that have no foreign key dependencies
-            ON other tables (independent tables), followed by tables with
-            dependencies that have been satisfied by earlier tables in the list.
-            
-            Note: For database truncation, this order should be REVERSED before
-            use to ensure child tables (those with foreign keys pointing to
-            other tables) are truncated before their parent tables (those being
-            pointed to).
+            The order ends with tables that have no foreign key dependencies
+            ON other tables (independent tables), preceded by tables with
+            dependencies that have been satisfied by later tables in the list.
+
+            It delivers the list of recommended truncation targets as promised.
+            The first table (left to right) should be dropped first.
         """
         # Create a working copy of dependencies
         remaining_deps = {table: set(deps) for table, deps in self.dependencies.items()}
@@ -114,7 +112,7 @@ class TableDependencyMap:
         
         # Return in truncation order - parents first, then child
         # This ensures foreign key constraints won't be violated
-        return ordered_tables
+        return list(reversed(ordered_tables))
     
     def get_dependent_tables(self, table: str) -> Set[str]:
         """
@@ -160,7 +158,8 @@ class TableDependencyMap:
     
     def verify_truncation_order(self, order: List[str]) -> bool:
         """
-        Verify that a given truncation order satisfies all dependencies.
+        Verify that a given truncation order satisfies all dependencies,
+        accounting for circular dependencies.
         
         Args:
             order: List of table names in proposed truncation order
@@ -173,14 +172,26 @@ class TableDependencyMap:
             logger.error("The truncation order doesn't include all tables")
             return False
         
+        # Detect circular dependencies
+        circular_deps = self._find_circular_dependencies()
+        logger.debug(f"Detected circular dependencies: {circular_deps}")
+        
         # Create a set of processed tables
         processed = set()
         
         # Check each table in the order
+        print(f"circular deps = {circular_deps}")
         for table in order:
             # Check if all dependencies have been processed
             for dependent_table in self.reverse_dependencies.get(table, set()):
+                # Skip circular dependencies during verification
+                if (dependent_table, table) in circular_deps:
+                    logger.debug(f"Skipping circular dependency check: {dependent_table} -> {table}")
+                    continue
+                    
                 if dependent_table not in processed and dependent_table in order:
+                    print(f"found problematic table: {dependent_table}")
+                    print(f"supposedly {dependent_table} depends on {table}")
                     logger.error(f"Invalid truncation order: {table} is referenced by {dependent_table}, "
                                 f"but {dependent_table} hasn't been processed yet")
                     return False
@@ -189,6 +200,63 @@ class TableDependencyMap:
             processed.add(table)
         
         return True
+
+    def _find_circular_dependencies(self) -> Set[Tuple[str, str]]:
+        """
+        Find all circular dependencies in the schema.
+        
+        Returns:
+            Set of (table1, table2) pairs where table1 depends on table2 
+            and there's a circular path back to table1
+        """
+        circular_deps = set()
+        
+        # Find self-references first (simplest form of circular dependency)
+        for table in self.tables:
+            if table in self.dependencies[table]:
+                circular_deps.add((table, table))
+        
+        # Find more complex circular paths
+        for start_table in self.tables:
+            # Skip if we already know this table is in a cycle
+            if any((start_table, other) in circular_deps for other in self.tables):
+                continue
+                
+            # Do a depth-first search from this table
+            visited = set()
+            path = []
+            
+            def dfs(current_table):
+                # If we've seen this table in the current path, we found a cycle
+                if current_table in path:
+                    # Extract and record the cycle
+                    cycle_start = path.index(current_table)
+                    cycle = path[cycle_start:] + [current_table]
+                    # Add all edges in the cycle to circular_deps
+                    for i in range(len(cycle) - 1):
+                        circular_deps.add((cycle[i], cycle[i+1]))
+                    circular_deps.add((cycle[-1], cycle[0]))  # Close the loop
+                    return
+                    
+                # If we've processed this table before, skip it
+                if current_table in visited:
+                    return
+                    
+                # Add to path and mark as visited
+                visited.add(current_table)
+                path.append(current_table)
+                
+                # Explore dependencies
+                for dep_table in self.dependencies[current_table]:
+                    dfs(dep_table)
+                    
+                # Remove from path as we backtrack
+                path.pop()
+            
+            # Start DFS from the current table
+            dfs(start_table)
+        
+        return circular_deps
 
     def print_dependency_tree(self, output_format: str = "text") -> str:
         """

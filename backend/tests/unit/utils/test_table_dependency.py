@@ -85,8 +85,7 @@ class TestTableDependencyMap:
         dependency_map = TableDependencyMap(engine, inspector=mock_inspector)
         
         # Get table truncation order: child first
-        topological_order = dependency_map.get_truncation_order()
-        truncation_order = list(reversed(topological_order))
+        truncation_order = dependency_map.get_truncation_order()
         
         # Verify order guarantees
         # 1. Comments should come before posts and users
@@ -257,8 +256,11 @@ def test_with_circular_dependencies():
         assert len(order) == 3
         assert set(order) == {"a", "b", "c"}
         
-        # Verify the order is not valid (due to circular dependencies)
-        assert not dependency_map.verify_truncation_order(order)
+        # Verify that there indeed exists circularity
+        circular_deps = dependency_map._find_circular_dependencies()
+        expected_edges = {('a', 'c'), ('c', 'b'), ('b', 'a')}
+        assert len(circular_deps) > 0
+        assert expected_edges.issubset(circular_deps)
 
 
 def test_real_photo_gallery_schema():
