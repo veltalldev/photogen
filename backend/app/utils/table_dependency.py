@@ -21,7 +21,7 @@ class TableDependencyMap:
     Used to determine the proper order for truncating tables.
     """
     
-    def __init__(self, engine: Engine):
+    def __init__(self, engine: Engine, inspector=None):
         """
         Initialize the dependency map with a SQLAlchemy engine.
         
@@ -32,6 +32,7 @@ class TableDependencyMap:
         self.dependencies: Dict[str, Set[str]] = {}
         self.reverse_dependencies: Dict[str, Set[str]] = {}
         self.tables: List[str] = []
+        self._inspector = inspector
         self._build_dependencies()
     
     def _build_dependencies(self) -> None:
@@ -39,7 +40,10 @@ class TableDependencyMap:
         Build the dependency graph by querying the database schema.
         """
         # Get all tables in the database
-        inspector = inspect(self.engine)
+        if self._inspector is None:
+            inspector = inspect(self.engine)
+        else:
+            inspector = self._inspector
         self.tables = inspector.get_table_names()
         
         # Initialize dependency dicts
@@ -67,8 +71,14 @@ class TableDependencyMap:
         
         Returns:
             List of table names in the order they should be truncated.
-            Tables with no dependencies come first, followed by tables
-            that depend on them, and so on.
+            The order starts with tables that have no foreign key dependencies
+            ON other tables (independent tables), followed by tables with
+            dependencies that have been satisfied by earlier tables in the list.
+            
+            Note: For database truncation, this order should be REVERSED before
+            use to ensure child tables (those with foreign keys pointing to
+            other tables) are truncated before their parent tables (those being
+            pointed to).
         """
         # Create a working copy of dependencies
         remaining_deps = {table: set(deps) for table, deps in self.dependencies.items()}
@@ -102,7 +112,7 @@ class TableDependencyMap:
                 for deps in remaining_deps.values():
                     deps.discard(table)
         
-        # Return in truncation order - child tables first, then parents
+        # Return in truncation order - parents first, then child
         # This ensures foreign key constraints won't be violated
         return ordered_tables
     
@@ -169,10 +179,10 @@ class TableDependencyMap:
         # Check each table in the order
         for table in order:
             # Check if all dependencies have been processed
-            for dependency in self.dependencies[table]:
-                if dependency not in processed and dependency in order:
-                    logger.error(f"Invalid truncation order: {table} depends on {dependency}, "
-                                f"but {dependency} hasn't been processed yet")
+            for dependent_table in self.reverse_dependencies.get(table, set()):
+                if dependent_table not in processed and dependent_table in order:
+                    logger.error(f"Invalid truncation order: {table} is referenced by {dependent_table}, "
+                                f"but {dependent_table} hasn't been processed yet")
                     return False
             
             # Mark this table as processed
